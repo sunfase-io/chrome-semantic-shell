@@ -1,0 +1,51 @@
+{
+  "name": "chrome-semantic-shell-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "packageManager": "pnpm@10.33.0",
+  "pnpm": {
+    "overrides": {
+      "ajv>fast-uri": "3.1.5"
+    }
+  },
+  "author": "sunfase",
+  "type": "module",
+  "scripts": {
+    "build:shared": "pnpm --filter chrome-semantic-shell-shared build",
+    "build:native": "pnpm --filter chrome-semantic-shell build",
+    "build:extension": "pnpm --filter chrome-semantic-shell-extension build",
+    "build": "pnpm -r build",
+    "dev:shared": "pnpm --filter chrome-semantic-shell-shared dev",
+    "dev:native": "pnpm --filter chrome-semantic-shell dev",
+    "dev:extension": "pnpm --filter chrome-semantic-shell-extension dev",
+    "dev": "pnpm --filter chrome-semantic-shell-shared build && pnpm -r --parallel dev",
+    "lint": "pnpm -r lint",
+    "lint:fix": "pnpm -r lint:fix",
+    "format": "pnpm -r format",
+    "typecheck": "pnpm build:shared && pnpm -r exec tsc --noEmit",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^19.8.1",
+    "@commitlint/config-conventional": "^19.8.1",
+    "@eslint/js": "^9.25.1",
+    "@typescript-eslint/eslint-plugin": "^8.32.0",
+    "@typescript-eslint/parser": "^8.32.0",
+    "eslint": "^9.26.0",
+    "eslint-config-prettier": "^10.1.5",
+    "globals": "^16.1.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^15.5.1",
+    "prettier": "^3.5.3",
+    "typescript": "^5.8.3",
+    "typescript-eslint": "^8.32.0"
+  },
+  "lint-staged": {
+    "app/chrome-extension/**/*.{js,jsx,ts,tsx}": "pnpm --dir app/chrome-extension exec eslint --fix",
+    "app/native-server/**/*.{js,jsx,ts,tsx}": "pnpm --dir app/native-server exec eslint --fix",
+    "packages/shared/**/*.{js,jsx,ts,tsx}": "pnpm --dir packages/shared exec eslint --fix",
+    "**/*.{json,md,yml,yaml,html,css}": [
+      "prettier --write"
+    ]
+  }
+}

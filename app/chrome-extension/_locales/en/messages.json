@@ -1,0 +1,6 @@
+{
+  "extensionName": { "message": "Chrome Semantic Shell" },
+  "extensionDescription": {
+    "message": "Headless browser semantic runtime for the local chrome-shell command"
+  }
+}

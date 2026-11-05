@@ -1,0 +1,259 @@
+{
+  "schemaVersion": 1,
+  "description": "会话故障与公开命令契约共同形成覆盖范围；覆盖项不等于测试已经通过，实际结果以执行回执为准。",
+  "groups": [
+    {
+      "id": "dsl",
+      "features": ["quotes", "variables", "pipeline", "&&", ";", "||", "dry-run"],
+      "evidence": "本地历史会话复盘（会话记录不公开）",
+      "offline": "app/chrome-extension/tests/semantic-shell/semantic-shell-dsl.test.ts",
+      "live": ["typed-vars", "fail-fast"]
+    },
+    {
+      "id": "observe",
+      "features": [
+        "inspect interactive",
+        "inspect forms",
+        "inspect tables",
+        "inspect dialog",
+        "inspect text",
+        "inspect full",
+        "query"
+      ],
+      "evidence": "本地历史会话复盘（会话记录不公开）",
+      "offline": "app/chrome-extension/tests/semantic-shell/semantic-state-core.test.ts",
+      "live": ["perception", "row-scope"]
+    },
+    {
+      "id": "refs",
+      "features": ["stable ref", "stale ref", "unique target", "scope=pipe", "frame"],
+      "evidence": "本地历史会话复盘（会话记录不公开）",
+      "offline": "app/chrome-extension/tests/semantic-shell/framed-interaction.test.ts",
+      "live": ["ambiguous-target", "stale-ref", "iframe", "row-scope"]
+    },
+    {
+      "id": "forms",
+      "features": ["fill", "fillform", "select", "check", "click", "dblclick"],
+      "evidence": "本地历史会话复盘（会话记录不公开）",
+      "offline": "app/chrome-extension/tests/semantic-shell/named-target.test.ts",
+      "live": ["form", "check", "dblclick", "ambiguous-target"]
+    },
+    {
+      "id": "interaction",
+      "features": ["key", "hover", "scroll", "drag", "upload"],
+      "evidence": "本地历史会话复盘（会话记录不公开）",
+      "offline": "app/chrome-extension/tests/semantic-shell/framed-interaction.test.ts",
+      "live": ["keyboard", "hover", "scroll", "drag", "upload"]
+    },
+    {
+      "id": "navigation",
+      "features": [
+        "navigate",
+        "reload",
+        "back",
+        "forward",
+        "tab list",
+        "tab new",
+        "tab switch",
+        "tab close",
+        "--tab",
+        "--window",
+        "expectedUrl"
+      ],
+      "evidence": "localhost port navigation live failure",
+      "offline": "app/chrome-extension/tests/semantic-shell/navigation-fast-path.test.ts",
+      "live": ["navigation", "tabs", "wrong-tab", "stale-page"]
+    },
+    {
+      "id": "wait",
+      "features": [
+        "wait selector",
+        "wait text",
+        "wait navigation",
+        "wait network",
+        "watch",
+        "diff",
+        "timeout"
+      ],
+      "evidence": "本地历史会话复盘（会话记录不公开）",
+      "offline": "app/chrome-extension/tests/semantic-shell/semantic-state-version.test.ts",
+      "live": ["async-wait", "invalid-selector", "network", "watch-diff"]
+    },
+    {
+      "id": "assert",
+      "features": ["assert text", "assert exists", "assert visible", "variable assertions"],
+      "evidence": "本地历史会话复盘（会话记录不公开）",
+      "offline": "app/chrome-extension/tests/semantic-shell/semantic-shell-tool.test.ts",
+      "live": ["typed-vars", "fail-fast", "form"]
+    },
+    {
+      "id": "control",
+      "features": ["set", "for", "if", "defer", "cancellation"],
+      "evidence": "公开 DSL 控制流契约，补充超时与清理回归",
+      "offline": "app/chrome-extension/tests/semantic-shell/cancellation.test.ts",
+      "live": ["control-flow", "defer-failure"]
+    },
+    {
+      "id": "tools",
+      "features": [
+        "tool ls",
+        "tool call",
+        "call",
+        "readonly",
+        "http-sequence",
+        "semantic-sequence",
+        "JS",
+        "HTTP",
+        "extract"
+      ],
+      "evidence": "本地历史会话复盘（会话记录不公开）",
+      "offline": "app/native-server/src/command/workspace-tools.test.ts",
+      "live": ["page-tool", "read-only-tool", "http", "extract", "learn-replay"]
+    },
+    {
+      "id": "capture",
+      "features": [
+        "capture begin",
+        "capture end",
+        "capture publish",
+        "typed bindings",
+        "secret redaction"
+      ],
+      "evidence": "本地历史会话复盘（会话记录不公开）",
+      "offline": "app/chrome-extension/tests/semantic-shell/semantic-shell-tool.test.ts",
+      "live": ["capture-publish"]
+    },
+    {
+      "id": "diagnostics",
+      "features": [
+        "screenshot",
+        "console buffer",
+        "network start",
+        "network stop",
+        "download",
+        "dialog accept",
+        "dialog dismiss"
+      ],
+      "evidence": "其余为公开命令契约补充",
+      "offline": "app/chrome-extension/tests/page-diff/page-diff-api-log.test.ts",
+      "live": ["screenshot", "console", "network", "download", "browser-dialog"]
+    },
+    {
+      "id": "learning",
+      "features": [
+        "automatic admission",
+        "parameterization",
+        "distinct examples",
+        "dependency change",
+        "quarantine",
+        "revision update",
+        "expiry",
+        "LRU",
+        "restart",
+        "manual-edit conflict",
+        "symlink boundary",
+        "background failure"
+      ],
+      "evidence": "本次用户明确提出自动学习、自动更新和删除过时脚本",
+      "offline": "app/native-server/src/command/operation-memory.test.ts",
+      "live": ["learn-replay"]
+    },
+    {
+      "id": "jev",
+      "features": [
+        "shared config",
+        "jev-latest",
+        "disabled",
+        "unknown",
+        "low confidence",
+        "no progress",
+        "HTTP failure",
+        "one request per decision",
+        "deterministic batch"
+      ],
+      "evidence": "用户强调 Jev 的速度；现有真实 API smoke 返回 jev-1.13.0",
+      "offline": "skills/chrome-shell/evals/test_jev_flow.py",
+      "live": ["jev-flow"]
+    },
+    {
+      "id": "inventory",
+      "features": [
+        "new session",
+        "old-session append",
+        "edited existing message",
+        "excluded research family",
+        "replaced rollout"
+      ],
+      "evidence": "用户要求保存本次分析会话、后续纳入新增会话内容",
+      "offline": "tests/browser-automation/test_inventory.py",
+      "live": []
+    },
+    {
+      "id": "js-runtime",
+      "features": [
+        "expression-return",
+        "quoted-equals",
+        "VARS",
+        "frame",
+        "truncation-warning",
+        "fallback-engines"
+      ],
+      "evidence": "本地历史会话复盘（会话记录不公开）",
+      "offline": "app/chrome-extension/tests/semantic-shell/javascript-forms.test.ts",
+      "live": ["js-expression", "js-quoted-equals", "js-vars"]
+    },
+    {
+      "id": "dsl-validation",
+      "features": [
+        "quote-aware-options",
+        "unknown-options",
+        "quoted-selectors",
+        "error-columns",
+        "fail-fast-flag"
+      ],
+      "evidence": "本地历史会话复盘（会话记录不公开）",
+      "offline": "app/chrome-extension/tests/semantic-shell/semantic-shell-dsl.test.ts",
+      "live": ["unknown-option", "quoted-selector", "fail-fast-file"]
+    },
+    {
+      "id": "page-data",
+      "features": [
+        "http-page-context",
+        "pick",
+        "storage-get",
+        "extract-fields",
+        "network-text-plain"
+      ],
+      "evidence": "本地历史会话复盘（会话记录不公开）",
+      "offline": "app/chrome-extension/tests/semantic-shell/runtime-helpers.test.ts",
+      "live": ["http-page-pick", "storage", "extract-fields", "network-text-plain"]
+    },
+    {
+      "id": "targets-2026-10",
+      "features": [
+        "query-zero-fails",
+        "role-dialog",
+        "scroll-target",
+        "trusted-type",
+        "upload-multiple"
+      ],
+      "evidence": "本地历史会话复盘（会话记录不公开）",
+      "offline": "app/chrome-extension/tests/semantic-shell/semantic-state-core.test.ts",
+      "live": ["query-zero", "dialog-role", "scroll-target", "type-trusted", "upload-multiple"]
+    },
+    {
+      "id": "screenshots",
+      "features": ["cdp-tab-capture", "element", "full-page", "no-downloads"],
+      "evidence": "本地历史会话复盘（会话记录不公开）",
+      "offline": "app/native-server/src/command/semantic-cli-core.test.ts",
+      "live": ["screenshot-element", "screenshot-full"]
+    },
+    {
+      "id": "navigation-2026-10",
+      "features": ["wait-url", "navigate-error-page", "tool-timeout"],
+      "evidence": "本地历史会话复盘（会话记录不公开）",
+      "offline": "app/chrome-extension/tests/semantic-shell/semantic-shell-tool.test.ts",
+      "live": ["wait-url", "navigate-error", "tool-timeout"]
+    }
+  ]
+}

@@ -1,0 +1,4 @@
+{
+  "extensionName": { "message": "Chrome Semantic Shell" },
+  "extensionDescription": { "message": "由本地 chrome-shell 命令驱动的无界面浏览器语义运行时" }
+}

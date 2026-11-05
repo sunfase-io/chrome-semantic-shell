@@ -1,0 +1,354 @@
+{
+  "fixture": "synthetic localhost; setup/reset/oracle excluded equally",
+  "rows": [
+    {
+      "mode": "cli_steps",
+      "run": 0,
+      "total_ms": 1454.3,
+      "calls": 6,
+      "verified": true
+    },
+    {
+      "mode": "cli_batch",
+      "run": 0,
+      "total_ms": 722.2,
+      "calls": 1,
+      "verified": true
+    },
+    {
+      "mode": "http_batch",
+      "run": 0,
+      "total_ms": 639.8,
+      "calls": 1,
+      "verified": true
+    },
+    {
+      "mode": "http_batch",
+      "run": 1,
+      "total_ms": 604.9,
+      "calls": 1,
+      "verified": true
+    },
+    {
+      "mode": "cli_batch",
+      "run": 1,
+      "total_ms": 724.4,
+      "calls": 1,
+      "verified": true
+    },
+    {
+      "mode": "cli_steps",
+      "run": 1,
+      "total_ms": 1465.9,
+      "calls": 6,
+      "verified": true
+    },
+    {
+      "mode": "cli_steps",
+      "run": 2,
+      "total_ms": 1457.9,
+      "calls": 6,
+      "verified": true
+    },
+    {
+      "mode": "cli_batch",
+      "run": 2,
+      "total_ms": 720.8,
+      "calls": 1,
+      "verified": true
+    },
+    {
+      "mode": "http_batch",
+      "run": 2,
+      "total_ms": 635.0,
+      "calls": 1,
+      "verified": true
+    },
+    {
+      "status": "verified",
+      "steps": 2,
+      "browser_calls": 3,
+      "browser_ms": 727.6,
+      "decision_ms": 1983.2,
+      "browser_runtime_ms": 440,
+      "total_ms": 2711.7,
+      "mode": "jev_cli",
+      "run": 0,
+      "calls": 3,
+      "verified": true
+    },
+    {
+      "status": "verified",
+      "steps": 2,
+      "browser_calls": 3,
+      "browser_ms": 435.4,
+      "decision_ms": 2038.0,
+      "browser_runtime_ms": 424,
+      "total_ms": 2473.9,
+      "mode": "jev_http",
+      "run": 0,
+      "calls": 3,
+      "verified": true
+    },
+    {
+      "status": "verified",
+      "steps": 2,
+      "browser_calls": 3,
+      "browser_ms": 418.6,
+      "decision_ms": 1890.7,
+      "browser_runtime_ms": 410,
+      "total_ms": 2309.8,
+      "mode": "jev_http",
+      "run": 1,
+      "calls": 3,
+      "verified": true
+    },
+    {
+      "status": "verified",
+      "steps": 2,
+      "browser_calls": 3,
+      "browser_ms": 717.8,
+      "decision_ms": 1746.0,
+      "browser_runtime_ms": 430,
+      "total_ms": 2464.7,
+      "mode": "jev_cli",
+      "run": 1,
+      "calls": 3,
+      "verified": true
+    },
+    {
+      "status": "verified",
+      "steps": 2,
+      "browser_calls": 3,
+      "browser_ms": 713.5,
+      "decision_ms": 1840.3,
+      "browser_runtime_ms": 433,
+      "total_ms": 2554.7,
+      "mode": "jev_cli",
+      "run": 2,
+      "calls": 3,
+      "verified": true
+    },
+    {
+      "status": "verified",
+      "steps": 2,
+      "browser_calls": 3,
+      "browser_ms": 438.4,
+      "decision_ms": 1981.8,
+      "browser_runtime_ms": 429,
+      "total_ms": 2420.7,
+      "mode": "jev_http",
+      "run": 2,
+      "calls": 3,
+      "verified": true
+    }
+  ],
+  "learning": {
+    "automatically_published": true,
+    "replayed": true,
+    "version": 1,
+    "replay_ms": 635.7
+  },
+  "decisions": [
+    {
+      "event": "decision",
+      "node": "support",
+      "status": "selected",
+      "value": "help",
+      "probability": 0.97,
+      "margin": 0.94,
+      "model": "jev-1.13.0",
+      "decision_ms": 1048.7,
+      "usage": {
+        "input_tokens": 888,
+        "output_tokens": 38
+      }
+    },
+    {
+      "event": "decision",
+      "node": "policy",
+      "status": "selected",
+      "value": "warranty",
+      "probability": 0.98,
+      "margin": 0.96,
+      "model": "jev-1.13.0",
+      "decision_ms": 934.6,
+      "usage": {
+        "input_tokens": 920,
+        "output_tokens": 44
+      }
+    },
+    {
+      "event": "decision",
+      "node": "support",
+      "status": "selected",
+      "value": "help",
+      "probability": 0.97,
+      "margin": 0.94,
+      "model": "jev-1.13.0",
+      "decision_ms": 993.8,
+      "usage": {
+        "input_tokens": 888,
+        "output_tokens": 38
+      }
+    },
+    {
+      "event": "decision",
+      "node": "policy",
+      "status": "selected",
+      "value": "warranty",
+      "probability": 0.98,
+      "margin": 0.96,
+      "model": "jev-1.13.0",
+      "decision_ms": 1044.2,
+      "usage": {
+        "input_tokens": 920,
+        "output_tokens": 44
+      }
+    },
+    {
+      "event": "decision",
+      "node": "support",
+      "status": "selected",
+      "value": "help",
+      "probability": 0.96,
+      "margin": 0.9199999999999999,
+      "model": "jev-1.13.0",
+      "decision_ms": 966.2,
+      "usage": {
+        "input_tokens": 888,
+        "output_tokens": 38
+      }
+    },
+    {
+      "event": "decision",
+      "node": "policy",
+      "status": "selected",
+      "value": "warranty",
+      "probability": 0.97,
+      "margin": 0.94,
+      "model": "jev-1.13.0",
+      "decision_ms": 924.5,
+      "usage": {
+        "input_tokens": 920,
+        "output_tokens": 44
+      }
+    },
+    {
+      "event": "decision",
+      "node": "support",
+      "status": "selected",
+      "value": "help",
+      "probability": 0.97,
+      "margin": 0.94,
+      "model": "jev-1.13.0",
+      "decision_ms": 857.5,
+      "usage": {
+        "input_tokens": 888,
+        "output_tokens": 38
+      }
+    },
+    {
+      "event": "decision",
+      "node": "policy",
+      "status": "selected",
+      "value": "warranty",
+      "probability": 0.97,
+      "margin": 0.94,
+      "model": "jev-1.13.0",
+      "decision_ms": 888.5,
+      "usage": {
+        "input_tokens": 920,
+        "output_tokens": 44
+      }
+    },
+    {
+      "event": "decision",
+      "node": "support",
+      "status": "selected",
+      "value": "help",
+      "probability": 0.96,
+      "margin": 0.9199999999999999,
+      "model": "jev-1.13.0",
+      "decision_ms": 882.8,
+      "usage": {
+        "input_tokens": 888,
+        "output_tokens": 38
+      }
+    },
+    {
+      "event": "decision",
+      "node": "policy",
+      "status": "selected",
+      "value": "warranty",
+      "probability": 0.98,
+      "margin": 0.96,
+      "model": "jev-1.13.0",
+      "decision_ms": 957.6,
+      "usage": {
+        "input_tokens": 920,
+        "output_tokens": 44
+      }
+    },
+    {
+      "event": "decision",
+      "node": "support",
+      "status": "selected",
+      "value": "help",
+      "probability": 0.97,
+      "margin": 0.94,
+      "model": "jev-1.13.0",
+      "decision_ms": 953.8,
+      "usage": {
+        "input_tokens": 888,
+        "output_tokens": 38
+      }
+    },
+    {
+      "event": "decision",
+      "node": "policy",
+      "status": "selected",
+      "value": "warranty",
+      "probability": 0.97,
+      "margin": 0.94,
+      "model": "jev-1.13.0",
+      "decision_ms": 1028.1,
+      "usage": {
+        "input_tokens": 920,
+        "output_tokens": 44
+      }
+    }
+  ],
+  "summary": {
+    "cli_batch": {
+      "runs": 3,
+      "median_ms": 722.2,
+      "min_ms": 720.8,
+      "max_ms": 724.4
+    },
+    "cli_steps": {
+      "runs": 3,
+      "median_ms": 1457.9,
+      "min_ms": 1454.3,
+      "max_ms": 1465.9
+    },
+    "http_batch": {
+      "runs": 3,
+      "median_ms": 635.0,
+      "min_ms": 604.9,
+      "max_ms": 639.8
+    },
+    "jev_cli": {
+      "runs": 3,
+      "median_ms": 2554.7,
+      "min_ms": 2464.7,
+      "max_ms": 2711.7
+    },
+    "jev_http": {
+      "runs": 3,
+      "median_ms": 2420.7,
+      "min_ms": 2309.8,
+      "max_ms": 2473.9
+    }
+  }
+}

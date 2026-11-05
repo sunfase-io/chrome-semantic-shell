@@ -1,0 +1,115 @@
+name: Build Chrome Semantic Shell
+
+on:
+  push:
+    branches: [main, master, develop]
+    tags: ['v*']
+  pull_request:
+    branches: [main, master, develop]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Test extension runtime
+        run: pnpm --filter chrome-semantic-shell-extension test
+
+      - name: Test native CLI
+        run: pnpm --filter chrome-semantic-shell run test:coverage
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Test Jev flow and session regressions (offline)
+        run: |
+          python -c "from pathlib import Path; import tempfile; Path(tempfile.gettempdir(), 'opencode').mkdir(exist_ok=True)"
+          python -m unittest discover -s skills/chrome-shell/evals -p 'test_*.py' -v
+          python -m unittest discover -s tests/browser-automation -p 'test_*.py' -v
+
+      - name: Audit production dependencies
+        run: pnpm audit --prod
+
+      - name: Build
+        run: pnpm build
+
+      - name: Package release assets
+        shell: bash
+        run: |
+          VERSION="$(node -p "require('./app/native-server/package.json').version")"
+          if [[ "${GITHUB_REF_TYPE}" == "tag" && "${GITHUB_REF_NAME}" != "v${VERSION}" ]]; then
+            echo "Tag ${GITHUB_REF_NAME} does not match package version v${VERSION}" >&2
+            exit 1
+          fi
+          mkdir -p release
+          (cd dist-extension/chrome-mv3 && zip -qr "../../release/chrome-semantic-shell-extension-${VERSION}.zip" .)
+          (cd skills && zip -qr "../release/chrome-shell-skill-${VERSION}.zip" chrome-shell -x 'chrome-shell/evals/*' '*/__pycache__/*')
+          pnpm --dir packages/shared pack --pack-destination "${GITHUB_WORKSPACE}/release"
+          pnpm --dir app/native-server pack --pack-destination "${GITHUB_WORKSPACE}/release"
+
+      - name: Upload release assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: chrome-semantic-shell-${{ github.sha }}
+          path: release/*
+          if-no-files-found: error
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write # npm Trusted Publishing (OIDC); no NPM_TOKEN secret
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: chrome-semantic-shell-${{ github.sha }}
+          path: release
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: release/*
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+
+      # Trusted Publishing needs npm >= 11.5.1; provenance is attached automatically.
+      # A version that already exists (e.g. the manual first publish) is skipped.
+      - name: Publish shared runtime and Native CLI to npm
+        shell: bash
+        run: |
+          npm install -g npm@^11.5.1
+          VERSION="${GITHUB_REF_NAME#v}"
+          publish() {
+            if npm view "$1@${VERSION}" version >/dev/null 2>&1; then
+              echo "$1@${VERSION} already published, skipping"
+            else
+              npm publish "$2" --access public
+            fi
+          }
+          publish chrome-semantic-shell-shared release/chrome-semantic-shell-shared-${VERSION}.tgz
+          publish chrome-semantic-shell release/chrome-semantic-shell-${VERSION}.tgz

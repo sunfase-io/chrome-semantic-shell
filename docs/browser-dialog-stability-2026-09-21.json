@@ -1,0 +1,20 @@
+{
+  "fixture": "synthetic localhost",
+  "results": [
+    {
+      "id": "browser-dialog",
+      "status": "passed",
+      "duration_ms": 991.9
+    },
+    {
+      "id": "browser-dialog",
+      "status": "passed",
+      "duration_ms": 887.2
+    },
+    {
+      "id": "browser-dialog",
+      "status": "passed",
+      "duration_ms": 908.1
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "jev": {
+    "enabled": true,
+    "keepalive": true,
+    "config_file": "~/.agents/jev/config.json",
+    "skill_script": "~/.agents/skills/jev/scripts/jev.py",
+    "timeout_seconds": 8,
+    "min_probability": 0.85,
+    "min_margin": 0.2
+  },
+  "learning": {
+    "enabled": true,
+    "minSuccesses": 2,
+    "maxActive": 32,
+    "idleDays": 30
+  },
+  "browser_timeout_ms": 10000,
+  "max_steps": 8
+}

@@ -1,0 +1,21 @@
+{
+  "skill": "chrome-shell",
+  "cases": [
+    {
+      "prompt": "用 chrome-shell 命令操作当前标签页，填写表单后验证接口。",
+      "shouldTrigger": true
+    },
+    {
+      "prompt": "直接用本地 Semantic Shell 命令列出浏览器标签。",
+      "shouldTrigger": true
+    },
+    {
+      "prompt": "请用 chrome_read_page 和 chrome_computer 完成这个页面操作。",
+      "shouldTrigger": false
+    },
+    {
+      "prompt": "用 Playwright 新开无痕浏览器跑测试。",
+      "shouldTrigger": false
+    }
+  ]
+}

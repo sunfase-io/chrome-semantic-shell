@@ -1,0 +1,49 @@
+{
+  "name": "chrome-semantic-shell-shared",
+  "version": "1.0.0",
+  "description": "Shared protocol types and constants for Chrome Semantic Shell",
+  "author": "sunfase",
+  "license": "MIT",
+  "homepage": "https://github.com/sunfase-io/chrome-semantic-shell#readme",
+  "bugs": {
+    "url": "https://github.com/sunfase-io/chrome-semantic-shell/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sunfase-io/chrome-semantic-shell.git",
+    "directory": "packages/shared"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "main": "dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.mjs"
+      },
+      "require": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      }
+    }
+  },
+  "scripts": {
+    "build": "tsup src/index.ts --format cjs,esm --dts --clean",
+    "dev": "tsup src/index.ts --format cjs,esm --dts --watch",
+    "lint": "eslint src",
+    "lint:fix": "eslint src --fix",
+    "format": "prettier --write 'src/**/*.{js,ts,json}'"
+  },
+  "files": [
+    "dist"
+  ],
+  "devDependencies": {
+    "@types/node": "^18.0.0",
+    "@typescript-eslint/parser": "^8.32.0",
+    "tsup": "^8.4.0"
+  }
+}

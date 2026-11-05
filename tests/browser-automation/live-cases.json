@@ -1,0 +1,299 @@
+[
+  {
+    "id": "perception",
+    "program": "inspect interactive limit=30 && inspect forms && inspect tables && inspect text && inspect full limit=40 && query role=button name=\"Save\"",
+    "oracle": "document.querySelectorAll('input').length >= 3"
+  },
+  {
+    "id": "form",
+    "program": "fillform Name=$name Email=$email && select role=combobox name=\"Category\" value=\"Policy\" && query role=button name=\"Save\" | click && wait text=\"Save complete\" timeout=3000 && assert text=\"Save complete\"",
+    "vars": {
+      "name": "fixture-user",
+      "email": "fixture@example.test"
+    },
+    "oracle": "document.querySelector('#name').value === 'fixture-user' && document.querySelector('#category').value === 'policy'",
+    "saved": {
+      "name": "fixture-user",
+      "email": "fixture@example.test",
+      "category": "policy"
+    }
+  },
+  {
+    "id": "typed-vars",
+    "program": "set $value=\"typed-value\" && fill role=textbox name=\"Name\" value=$value && assert exists=\"#name\"",
+    "oracle": "document.querySelector('#name').value === 'typed-value'"
+  },
+  {
+    "id": "check",
+    "program": "check role=checkbox name=\"Enabled\" value=true && check role=checkbox name=\"Enabled\" value=false && assert exists=\"#enabled\"",
+    "oracle": "document.querySelector('#enabled').checked === false"
+  },
+  {
+    "id": "dblclick",
+    "program": "dblclick role=button name=\"Double\" && assert exists=\"#double\"",
+    "oracle": "window.doubleCount === 1"
+  },
+  {
+    "id": "keyboard",
+    "program": "fill role=textbox name=\"Name\" value=\"keyboard\" && key Enter css=\"#name\"",
+    "oracle": "window.keySeen === true"
+  },
+  {
+    "id": "hover",
+    "refs": {
+      "HOVER": {
+        "role": "button",
+        "name": "Hover target"
+      }
+    },
+    "program": "hover {{HOVER}}",
+    "oracle": "window.hovered === true"
+  },
+  {
+    "id": "scroll",
+    "program": "scroll down 600",
+    "oracle": "window.scrollY > 0"
+  },
+  {
+    "id": "drag",
+    "refs": {
+      "SRC": {
+        "role": "button",
+        "name": "Drag source"
+      },
+      "DST": {
+        "role": "button",
+        "name": "Drop target"
+      }
+    },
+    "program": "drag {{SRC}} {{DST}}",
+    "oracle": "window.dragged === true"
+  },
+  {
+    "id": "upload",
+    "program": "upload css=\"#file\" file=$file",
+    "oracle": "document.querySelector('#file').files[0]?.name === 'fixture-upload.txt'"
+  },
+  {
+    "id": "row-scope",
+    "program": "query role=row query=\"ORDER-002\" | query role=button name=\"View\" scope=pipe | click",
+    "oracle": "window.viewed === 'ORDER-002'"
+  },
+  {
+    "id": "ambiguous-target",
+    "setup": "js code=\"document.body.insertAdjacentHTML('beforeend', '<label>Name <input></label>')\"",
+    "program": "fill role=textbox name=\"Name\" value=\"wrong\"",
+    "expectError": true,
+    "oracle": "document.querySelector('#name').value === ''"
+  },
+  {
+    "id": "stale-ref",
+    "refs": {
+      "OLD": {
+        "role": "button",
+        "name": "Count"
+      }
+    },
+    "setupAfterRefs": "js code=\"document.querySelector('#counter').remove()\"",
+    "program": "click {{OLD}}",
+    "expectError": true,
+    "oracle": "window.count === 0"
+  },
+  {
+    "id": "iframe",
+    "program": "fill role=textbox name=\"Frame Field\" value=\"framed\"",
+    "oracle": "document.querySelector('#frame').contentDocument.querySelector('#inside').value === 'framed'"
+  },
+  {
+    "id": "async-wait",
+    "program": "query role=button name=\"Delayed result\" | click && wait text=\"Async ready\" timeout=2000 && wait selector=\"#status\" timeout=500 && assert text=\"Async ready\"",
+    "oracle": "document.querySelector('#status').textContent === 'Async ready'"
+  },
+  {
+    "id": "invalid-selector",
+    "program": "wait selector=\"[\" timeout=500",
+    "expectError": true,
+    "oracle": "window.count === 0"
+  },
+  {
+    "id": "fail-fast",
+    "program": "assert exists=\"#absent\" && query role=button name=\"Count\" | click",
+    "expectError": true,
+    "oracle": "window.count === 0"
+  },
+  {
+    "id": "control-flow",
+    "program": "set $ids=[\"first\",\"last\"] && for $id in $ids { fill css=\"#name\" value=$id } && if success { assert exists=\"#name\" }",
+    "oracle": "document.querySelector('#name').value === 'last'"
+  },
+  {
+    "id": "defer-failure",
+    "program": "defer { fill css=\"#name\" value=\"cleaned\" }; assert exists=\"#absent\"",
+    "expectError": true,
+    "oracle": "document.querySelector('#name').value === 'cleaned'"
+  },
+  {
+    "id": "watch-diff",
+    "program": "inspect interactive && js code=\"setTimeout(() => {document.querySelector('#counter').textContent='Counter changed'}, 120)\" && watch timeout=1500 && diff",
+    "oracle": "document.querySelector('#counter').textContent === 'Counter changed'"
+  },
+  {
+    "id": "page-tool",
+    "program": "tool ls && tool call fixture_write input={\"value\":\"tool-value\"} && assert exists=\"#name\"",
+    "oracle": "document.querySelector('#name').value === 'tool-value'"
+  },
+  {
+    "id": "read-only-tool",
+    "program": "call fixture_read input={} && call fixture_read input={}",
+    "oracle": "window.count === 0"
+  },
+  {
+    "id": "http",
+    "program": "http GET /api/data",
+    "oracle": "window.count === 0",
+    "requestPath": "/api/data"
+  },
+  {
+    "id": "extract",
+    "program": "extract css=\"#extract-source\" attr=\"text\" as=$value && fill css=\"#name\" value=$value",
+    "oracle": "document.querySelector('#name').value === 'EXTRACTED-VALUE'"
+  },
+  {
+    "id": "screenshot",
+    "program": "screenshot",
+    "oracle": "!!document.querySelector('#canvas').getContext('2d')",
+    "image": true
+  },
+  {
+    "id": "console",
+    "program": "js code=\"console.error('fixture-console-error'); return true\" && console buffer --errors",
+    "oracle": "window.count === 0",
+    "outputContains": "fixture-console-error"
+  },
+  {
+    "id": "network",
+    "program": "network start && js code=\"await fetch('/api/data'); return true\" && wait network timeout=3000 && network stop",
+    "oracle": "window.count === 0",
+    "requestPath": "/api/data"
+  },
+  {
+    "id": "capture-publish",
+    "program": "fillform Name=\"capture-name\" Email=\"capture@example.test\" && capture begin && query role=button name=\"Save\" | click && wait text=\"Save complete\" timeout=3000 && capture end name=fixture_capture && capture publish name=fixture_capture bindings={\"requests.0.body.name\":\"name\"} allowConstants",
+    "oracle": null,
+    "saved": {
+      "name": "capture-name",
+      "email": "capture@example.test",
+      "category": "basic"
+    },
+    "artifact": ".webmcp/operations/fixture_capture.tool.json"
+  },
+  {
+    "id": "js-expression",
+    "program": "js \"1 + 41\"",
+    "outputContains": "\"value\": 42",
+    "oracle": "window.count === 0"
+  },
+  {
+    "id": "js-quoted-equals",
+    "program": "js \"const n = 40; return n + 2\"",
+    "outputContains": "\"value\": 42",
+    "oracle": "window.count === 0"
+  },
+  {
+    "id": "js-vars",
+    "program": "js code=\"return VARS.extra + 1\"",
+    "vars": {
+      "extra": 41
+    },
+    "outputContains": "\"value\": 42",
+    "oracle": "window.count === 0"
+  },
+  {
+    "id": "unknown-option",
+    "program": "query role=button name=\"Count\" | click --tab 1",
+    "expectError": true,
+    "oracle": "window.count === 0"
+  },
+  {
+    "id": "query-zero",
+    "program": "query role=button name=\"No such button\" | click",
+    "expectError": true,
+    "oracle": "window.count === 0"
+  },
+  {
+    "id": "quoted-selector",
+    "program": "wait selector=\"[id=save]\" timeout=1000 && query css=\"[id=counter]\" | click",
+    "oracle": "window.count === 1"
+  },
+  {
+    "id": "http-page-pick",
+    "program": "http GET /api/data pick=count as=$n && fill css=\"#name\" value=$n",
+    "requestPath": "/api/data",
+    "oracle": "document.querySelector('#name').value === '2'"
+  },
+  {
+    "id": "storage",
+    "setup": "js code=\"sessionStorage.setItem('fixtureToken', JSON.stringify('tok-secret-1')); return true\"",
+    "program": "storage get session key=fixtureToken as=$t && js \"VARS.t.length\"",
+    "outputExcludes": "tok-secret-1",
+    "oracle": "window.count === 0",
+    "outputContains": "\"value\": 12"
+  },
+  {
+    "id": "extract-fields",
+    "program": "extract css=\"tbody tr\" fields={\"code\":\"td:first-child\"} as=$rows && js \"VARS.rows.filter((row) => (row.code || '').startsWith('ORDER')).length\"",
+    "outputContains": "\"value\": 2",
+    "oracle": "window.count === 0"
+  },
+  {
+    "id": "network-text-plain",
+    "program": "network start && js \"fetch('/api/text').then((r) => r.text())\" && wait network timeout=3000 && network stop url=/api/text",
+    "requestPath": "/api/text",
+    "outputContains": "text/plain",
+    "oracle": "window.count === 0"
+  },
+  {
+    "id": "dialog-role",
+    "program": "query role=button name=\"Choose contract\" | click && query role=dialog | query role=button name=\"确定\" scope=pipe",
+    "oracle": "document.querySelector('.el-dialog__wrapper').style.display === 'block'"
+  },
+  {
+    "id": "scroll-target",
+    "program": "scroll css=\"#bottom\"",
+    "oracle": "document.querySelector('#bottom').getBoundingClientRect().top < innerHeight"
+  },
+  {
+    "id": "type-trusted",
+    "program": "type css=\"#name\" \"trusted-text\" submit=true",
+    "oracle": "document.querySelector('#name').value === 'trusted-text' && window.keySeen === true"
+  },
+  {
+    "id": "upload-multiple",
+    "program": "upload css=\"#file\" file=[\"C:/a.txt\",\"C:/b.txt\"]",
+    "expectError": true,
+    "oracle": "document.querySelector('#file').files.length === 0"
+  },
+  {
+    "id": "screenshot-element",
+    "program": "screenshot css=\"#canvas\"",
+    "image": true,
+    "oracle": "window.count === 0"
+  },
+  {
+    "id": "screenshot-full",
+    "program": "screenshot full=true",
+    "image": true,
+    "oracle": "window.count === 0"
+  },
+  {
+    "id": "wait-url",
+    "program": "js \"history.pushState({}, '', '/pushed')\" && wait url~=\"/pushed\" timeout=2000",
+    "oracle": "location.pathname === '/pushed'"
+  },
+  {
+    "id": "tool-timeout",
+    "program": "call fixture_slow input={} timeout=300",
+    "expectError": true,
+    "oracle": "window.count === 0"
+  }
+]

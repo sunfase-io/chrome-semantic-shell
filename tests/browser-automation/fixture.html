@@ -1,0 +1,125 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>Chrome Shell regression fixture</title>
+<style>
+  body {
+    font: 16px sans-serif;
+    padding: 20px;
+  }
+  input,
+  button,
+  select {
+    margin: 5px;
+  }
+  #drag,
+  #drop {
+    display: inline-block;
+    width: 110px;
+    height: 45px;
+    padding: 8px;
+    margin: 8px;
+    background: #ddd;
+  }
+  #spacer {
+    height: 1600px;
+  }
+</style>
+<h1>Regression fixture</h1>
+<label>Name <input id="name" /></label>
+<label>Email <input id="email" /></label>
+<label
+  >Category
+  <select id="category"
+    ><option value="basic">Basic</option
+    ><option value="policy">Policy</option></select
+  ></label
+>
+<label><input id="enabled" type="checkbox" />Enabled</label>
+<button id="save">Save</button><button id="counter">Count</button
+><button id="double">Double</button> <button id="hover">Hover target</button
+><button id="delayed">Delayed result</button> <button id="open">Choose contract</button
+><input id="file" type="file" aria-label="File" />
+<a id="download" href="/download" download>Download fixture</a>
+<a id="next" href="/third">Next page</a>
+<p id="status"></p><p id="extract-source">EXTRACTED-VALUE</p><p id="contract"></p>
+<table
+  ><thead
+    ><tr><th>Code</th><th>Action</th></tr></thead
+  ><tbody>
+    <tr
+      ><td>ORDER-001</td><td><button onclick="window.viewed = 'ORDER-001'">View</button></td></tr
+    >
+    <tr
+      ><td>ORDER-002</td><td><button onclick="window.viewed = 'ORDER-002'">View</button></td></tr
+    >
+  </tbody></table
+>
+<div class="el-dialog__wrapper" role="dialog" style="display: none">
+  <h2 class="el-dialog__title">选择合同</h2>
+  <div class="el-table__body-wrapper"
+    ><table
+      ><tbody>
+        <tr class="el-table__row"
+          ><td><input name="contract" type="radio" value="ORDER-001" /></td><td>ORDER-001</td></tr
+        >
+        <tr class="el-table__row"
+          ><td><input name="contract" type="radio" value="ORDER-002" /></td><td>ORDER-002</td></tr
+        >
+      </tbody></table
+    ></div
+  >
+  <div class="el-dialog__footer"><button id="confirm">确定</button></div></div
+>
+<iframe
+  id="frame"
+  title="Nested form"
+  srcdoc="<label>Frame Field <input id='inside'></label>"
+></iframe>
+<div
+  ><div id="drag" role="button" aria-label="Drag source" tabindex="0">Drag source</div
+  ><div id="drop" role="button" aria-label="Drop target" tabindex="0">Drop target</div></div
+>
+<canvas id="canvas" width="100" height="40"></canvas><div id="spacer"></div
+><p id="bottom">Bottom marker</p>
+<script>
+  window.count = 0;
+  window.doubleCount = 0;
+  window.hovered = false;
+  window.keySeen = false;
+  window.dragged = false;
+  window.viewed = '';
+  const byId = (id) => document.getElementById(id);
+  byId('counter').onclick = () => window.count++;
+  byId('double').ondblclick = () => window.doubleCount++;
+  byId('hover').onmouseenter = () => (window.hovered = true);
+  byId('name').onkeydown = (e) => {
+    if (e.key === 'Enter') window.keySeen = true;
+  };
+  byId('delayed').onclick = () =>
+    setTimeout(() => (byId('status').textContent = 'Async ready'), 60);
+  byId('save').onclick = async () => {
+    const body = {
+      name: byId('name').value,
+      email: byId('email').value,
+      category: byId('category').value,
+    };
+    const r = await fetch('/save', { method: 'POST', body: JSON.stringify(body) });
+    if (!r.ok) throw Error('save failed');
+    byId('status').textContent = 'Save complete';
+  };
+  byId('open').onclick = () =>
+    (document.querySelector('.el-dialog__wrapper').style.display = 'block');
+  byId('confirm').onclick = () => {
+    const selected = document.querySelector('input[name=contract]:checked');
+    if (!selected) return;
+    byId('contract').textContent = selected.value;
+    document.querySelector('.el-dialog__wrapper').style.display = 'none';
+  };
+  byId('drag').onpointerdown = () => (window.dragStarted = true);
+  byId('drop').onpointerup = () => {
+    if (window.dragStarted) window.dragged = true;
+  };
+  const ctx = byId('canvas').getContext('2d');
+  ctx.fillStyle = 'blue';
+  ctx.fillRect(0, 0, 100, 40);
+</script>

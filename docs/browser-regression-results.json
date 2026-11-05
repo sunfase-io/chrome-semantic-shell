@@ -1,0 +1,290 @@
+{
+  "fixture": "synthetic localhost",
+  "results": [
+    {
+      "id": "perception",
+      "status": "passed",
+      "duration_ms": 481.0
+    },
+    {
+      "id": "form",
+      "status": "passed",
+      "duration_ms": 1068.0
+    },
+    {
+      "id": "typed-vars",
+      "status": "passed",
+      "duration_ms": 699.0
+    },
+    {
+      "id": "check",
+      "status": "passed",
+      "duration_ms": 814.2
+    },
+    {
+      "id": "dblclick",
+      "status": "passed",
+      "duration_ms": 671.3
+    },
+    {
+      "id": "keyboard",
+      "status": "passed",
+      "duration_ms": 704.6
+    },
+    {
+      "id": "hover",
+      "status": "passed",
+      "duration_ms": 943.1
+    },
+    {
+      "id": "scroll",
+      "status": "passed",
+      "duration_ms": 592.0
+    },
+    {
+      "id": "drag",
+      "status": "passed",
+      "duration_ms": 615.9
+    },
+    {
+      "id": "upload",
+      "status": "passed",
+      "duration_ms": 603.0
+    },
+    {
+      "id": "row-scope",
+      "status": "passed",
+      "duration_ms": 614.1
+    },
+    {
+      "id": "ambiguous-target",
+      "status": "passed",
+      "duration_ms": 773.2
+    },
+    {
+      "id": "stale-ref",
+      "status": "passed",
+      "duration_ms": 724.8
+    },
+    {
+      "id": "iframe",
+      "status": "passed",
+      "duration_ms": 670.6
+    },
+    {
+      "id": "async-wait",
+      "status": "passed",
+      "duration_ms": 776.0
+    },
+    {
+      "id": "invalid-selector",
+      "status": "passed",
+      "duration_ms": 482.5
+    },
+    {
+      "id": "fail-fast",
+      "status": "passed",
+      "duration_ms": 5420.4
+    },
+    {
+      "id": "control-flow",
+      "status": "passed",
+      "duration_ms": 914.3
+    },
+    {
+      "id": "defer-failure",
+      "status": "passed",
+      "duration_ms": 5658.2
+    },
+    {
+      "id": "watch-diff",
+      "status": "passed",
+      "duration_ms": 692.0
+    },
+    {
+      "id": "page-tool",
+      "status": "passed",
+      "duration_ms": 606.4
+    },
+    {
+      "id": "read-only-tool",
+      "status": "passed",
+      "duration_ms": 475.5
+    },
+    {
+      "id": "http",
+      "status": "passed",
+      "duration_ms": 610.3
+    },
+    {
+      "id": "extract",
+      "status": "passed",
+      "duration_ms": 669.9
+    },
+    {
+      "id": "screenshot",
+      "status": "passed",
+      "duration_ms": 591.2
+    },
+    {
+      "id": "console",
+      "status": "passed",
+      "duration_ms": 670.5
+    },
+    {
+      "id": "network",
+      "status": "passed",
+      "duration_ms": 847.0
+    },
+    {
+      "id": "capture-publish",
+      "status": "passed",
+      "duration_ms": 858.3
+    },
+    {
+      "id": "jg-dialog",
+      "status": "passed",
+      "duration_ms": 673.4
+    },
+    {
+      "id": "js-expression",
+      "status": "passed",
+      "duration_ms": 597.9
+    },
+    {
+      "id": "js-quoted-equals",
+      "status": "passed",
+      "duration_ms": 590.1
+    },
+    {
+      "id": "js-vars",
+      "status": "passed",
+      "duration_ms": 614.2
+    },
+    {
+      "id": "unknown-option",
+      "status": "passed",
+      "duration_ms": 498.7
+    },
+    {
+      "id": "query-zero",
+      "status": "passed",
+      "duration_ms": 508.4
+    },
+    {
+      "id": "quoted-selector",
+      "status": "passed",
+      "duration_ms": 603.7
+    },
+    {
+      "id": "http-page-pick",
+      "status": "passed",
+      "duration_ms": 696.2
+    },
+    {
+      "id": "storage",
+      "status": "passed",
+      "duration_ms": 702.1
+    },
+    {
+      "id": "extract-fields",
+      "status": "passed",
+      "duration_ms": 594.3
+    },
+    {
+      "id": "network-text-plain",
+      "status": "passed",
+      "duration_ms": 831.6
+    },
+    {
+      "id": "dialog-role",
+      "status": "passed",
+      "duration_ms": 708.3
+    },
+    {
+      "id": "scroll-target",
+      "status": "passed",
+      "duration_ms": 613.5
+    },
+    {
+      "id": "type-trusted",
+      "status": "passed",
+      "duration_ms": 615.6
+    },
+    {
+      "id": "upload-multiple",
+      "status": "passed",
+      "duration_ms": 608.1
+    },
+    {
+      "id": "screenshot-element",
+      "status": "passed",
+      "duration_ms": 558.2
+    },
+    {
+      "id": "screenshot-full",
+      "status": "passed",
+      "duration_ms": 621.9
+    },
+    {
+      "id": "wait-url",
+      "status": "passed",
+      "duration_ms": 608.2
+    },
+    {
+      "id": "tool-timeout",
+      "status": "passed",
+      "duration_ms": 1698.7
+    },
+    {
+      "id": "browser-dialog",
+      "status": "passed",
+      "duration_ms": 621.8
+    },
+    {
+      "id": "download",
+      "status": "passed",
+      "duration_ms": 672.5
+    },
+    {
+      "id": "fail-fast-file",
+      "status": "passed",
+      "duration_ms": 5695.3
+    },
+    {
+      "id": "jev-flow",
+      "status": "skipped",
+      "reason": "requires explicit live API/download test flag"
+    },
+    {
+      "id": "learn-replay",
+      "status": "passed",
+      "duration_ms": 1427.3
+    },
+    {
+      "id": "navigate-error",
+      "status": "passed",
+      "duration_ms": 946.0
+    },
+    {
+      "id": "navigation",
+      "status": "passed",
+      "duration_ms": 2032.4
+    },
+    {
+      "id": "stale-page",
+      "status": "passed",
+      "duration_ms": 502.0
+    },
+    {
+      "id": "tabs",
+      "status": "passed",
+      "duration_ms": 774.8
+    },
+    {
+      "id": "wrong-tab",
+      "status": "passed",
+      "duration_ms": 466.0
+    }
+  ]
+}

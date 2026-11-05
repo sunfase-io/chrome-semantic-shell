@@ -1,0 +1,57 @@
+{
+  "skill": "chrome-shell",
+  "evals": [
+    {
+      "id": "batched-form",
+      "prompt": "使用本地命令在当前网页填写邮箱和密码，提交后确认出现仪表盘，并检查请求完成。",
+      "expected_output": "One chrome-shell invocation with scoped perception, batched fill, submit, wait/assert, and actionable delta consumption.",
+      "assertions": [
+        "Uses the chrome-shell executable",
+        "Keeps the coherent interaction in one Semantic Shell program",
+        "Uses variables without allowing the host shell to expand DSL $names",
+        "Verifies resulting state or network data"
+      ]
+    },
+    {
+      "id": "stale-ref",
+      "prompt": "页面跳转后旧 ref 点击失败，请继续操作并截图确认一个 Canvas 控件。",
+      "expected_output": "A fail-fast CLI strategy that re-queries after navigation, refuses fuzzy stale-ref recovery, and materializes the screenshot artifact for visual inspection.",
+      "assertions": [
+        "Does not retry stale coordinates or nth-element guesses",
+        "Runs a scoped inspect after navigation",
+        "Uses the artifact path printed by the screenshot command",
+        "Treats a nonzero command exit as failure"
+      ]
+    },
+    {
+      "id": "component-select",
+      "prompt": "在 Element UI 表单中把所属系统选为加工事业部贸易，并确认选择成功。",
+      "expected_output": "One scoped inspect/select program using the component combobox without DOM survey JavaScript.",
+      "assertions": [
+        "Uses inspect forms and select role=combobox",
+        "Does not query .el-select internals with JavaScript",
+        "Treats zero or ambiguous options as failures"
+      ]
+    },
+    {
+      "id": "row-scope",
+      "prompt": "在角色表中定位编码 ROLE_HDTC_YXBFJLJL，并点击该行的设置工作流角色按钮。",
+      "expected_output": "A single row-to-button semantic pipeline using scope=pipe.",
+      "assertions": [
+        "Queries a unique row before the row action",
+        "Uses scope=pipe for the nested button",
+        "Does not scan table rows with querySelector"
+      ]
+    },
+    {
+      "id": "readonly-tool",
+      "prompt": "调用项目 page tool 读取当前登录态和流程日志，不修改页面。",
+      "expected_output": "Declared read-only page tools called directly with compact results and no artificial wait.",
+      "assertions": [
+        "Uses call or tool call",
+        "Relies on readonly tool metadata",
+        "Does not add wait network after a guaranteed read-only call"
+      ]
+    }
+  ]
+}
