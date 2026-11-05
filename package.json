@@ -5,7 +5,7 @@
   "packageManager": "pnpm@10.33.0",
   "pnpm": {
     "overrides": {
-      "ajv>fast-uri": "3.1.5"
+      "ajv>fast-uri": "^3.1.9"
     }
   },
   "author": "sunfase",
