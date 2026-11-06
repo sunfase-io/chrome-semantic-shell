@@ -6,147 +6,434 @@
 
 [English](README.md) | 简体中文
 
-Chrome Semantic Shell 是一个本地优先、CLI-first 的浏览器自动化运行时，直接操作用户正在使用的 Chrome
-配置文件，因此可以复用现有登录态、扩展、证书和浏览器设置。
+**让 AI Agent（或你自己）用一条命令操作你正在用的那个 Chrome。**
 
-产品没有 popup、侧边栏、内置聊天 Agent、本地模型、向量库或可视化流程编辑器。Agent 和终端用户统一通过
-`chrome-shell` 操作浏览器。
+登录状态、公司内网单点登录、已装的扩展和证书都原样可用，不用另开浏览器、不用重新登录、不用开远程调试端口。
+一条命令里可以连续完成“填表 → 点保存 → 等结果 → 检查是否成功”，失败就明确报错。
 
-## 架构
+```powershell
+npm install -g chrome-semantic-shell
 
-```text
-Agent / terminal
-  → chrome-shell
-  → loopback POST /chrome/shell
-  → Native Messaging
-  → headless Chrome extension runtime
+# 看看浏览器里开着哪些标签页
+chrome-shell 'tab list'
+
+# 在 123 号标签页里：填邮箱、点登录、等首页出现、确认登录成功——一次调用完成
+chrome-shell 'fillform 邮箱=$email && query role=button name="登录" | click && wait text="仪表盘" && assert text="仪表盘"' --tab 123 --var 'email=user@example.com'
 ```
 
-- HTTP 服务只监听 loopback。
-- 每次 CLI 调用对应一条独立请求；成功、失败或超时后立即关闭 HTTP 连接。
-- Jev 流程运行器复用本地 HTTP 与 Jev HTTPS 连接，在同一进程中完成多步决策和执行。
-- 扩展与 Native host 之间只保留一条常驻 Native Messaging 通道。
-- 语义状态统一融合原生 HTML/ARIA、Vue 2、Vue 3、React、frame 和 WebMCP adapter。
-- 自动操作记忆在 Native host 后台积累成功证据、发布可复用工具并维护版本。
+## 目录
 
-## 主要能力
+- [它解决什么问题](#它解决什么问题)
+- [优势](#优势)
+- [与同类工具对比](#与同类工具对比)
+- [安装](#安装)
+- [上手：五个常见场景](#上手五个常见场景)
+- [命令速查](#命令速查)
+- [进阶：页面工具、自动学习、Jev](#进阶页面工具自动学习jev)
+- [实测数据](#实测数据)
+- [工作原理与安全边界](#工作原理与安全边界)
+- [开发与发布](#开发与发布)
 
-- 紧凑的 `inspect`、精确 `query` 与稳定 ref
-- 批量点击、填写、下拉选择、键盘、滚动、拖拽、上传、导航和标签页操作
-- `wait`、`assert`、`diff`、`watch`、网络、console、截图和下载验证
-- 变量、条件、循环、管道及 LIFO `defer` 清理
-- 自定义组件下拉按 label/value 精确选择，不使用模糊猜测
-- 使用 `scope=pipe` 完成表格行内关系查询
-- Workspace `.webmcp` 工具与页面标准 WebMCP 工具
-- HTTP 操作捕获、类型化输入绑定和凭证清洗
-- 歧义、陈旧 ref、非法输入、越界路径和超时全部 fail-fast
-- 自动学习带断言的稳定操作，参数化后发布为 `.webmcp`，按使用反馈更新、归档和淘汰
-- 可选 Jev 快速决策：闭集动作选择、持久连接、确定步骤合并和独立结果断言
-- 根据真实会话建立功能覆盖表，提供离线回归、真实浏览器夹具和性能对照
+## 它解决什么问题
 
-## 环境要求
+让大模型操作浏览器，常见的麻烦是：
 
-- Windows、macOS 或 Linux
-- Node.js 20 或更高版本（`node -v` 查看）
-- Google Chrome 或 Chromium（支持 Manifest V3 与 Native Messaging）
-- 可选：Python 3.10+，用于 Jev 运行器和 Python 测试
+- **登录态没了**：自动化工具通常另起一个干净的浏览器，公司后台、内网 SSO、需要证书或扫码的网站全都要重新登录。
+- **慢、费 token**：每点一下都要回到模型、再看一次完整页面，一个表单来回十几轮。
+- **点错了不知道**：页面上有两个“保存”按钮，工具默默点了第一个；下拉框是 Vue/React 组件，填进去的值页面根本不认。
+- **假成功**：命令都返回 OK，但数据其实没保存。
+
+Chrome Semantic Shell 的做法是：一个装在你 Chrome 里的扩展 + 一个本地命令行 `chrome-shell`。Agent 写一小段脚本（DSL），
+扩展在你的浏览器里执行，返回精简的页面信息和“这次操作改变了什么”。
+
+## 优势
+
+### 1. 直接用你自己的 Chrome
+
+- 用的是你日常的 Chrome 配置：登录态、Cookie、已装扩展、客户端证书、公司 SSO 都在。
+- **不需要**用 `--remote-debugging-port` 重启 Chrome，**不需要**另建 profile，也不需要每次连接都点授权。
+- 可以操作后台标签页（`--tab <id>`），不打断你在前台的工作；截图也能截后台标签页。
+
+### 2. 一次调用干完一整段活
+
+- 一段脚本里可以写多步：`&&`（上一步成功才继续）、`||`（失败时补救）、`|`（把找到的元素传给下一步）、变量、`if`、`for`。
+- `defer { ... }` 保证收尾：不管成功、失败还是超时，都会执行清理（例如关掉临时打开的标签页）。
+- 实测同一个表单：分 6 次调用要 1458ms，合成 1 次调用只要 722ms（见[实测数据](#实测数据)）。
+
+### 3. 省 token
+
+- `inspect` 输出紧凑：只列可交互元素、表单、表格或弹窗，并按 `limit=`、`role=`、`name~=` 在页面里先过滤再返回。
+- 每次写操作后只返回**变化**（新出现的提示、变成可点的按钮、发出的接口请求），不重复整页内容。
+- 纯只读的操作自动跳过“前后对比”，更快。
+
+### 4. 准：找不准就报错，绝不瞎猜
+
+- 匹配到多个元素时直接失败并列出候选，而不是默默点第一个。
+- 页面刷新后旧的元素引用（ref）失效会被识别出来，不会点到错的东西。
+- `select` 会真正打开下拉组件、等真实选项出现再点击，Element UI、Ant Design 这类组件下拉也能选对。
+- `scope=pipe` 把查找限定在某一行或某个弹窗里，例如“订单 ORDER-001 那一行的‘查看’按钮”。
+
+### 5. 懂前端框架
+
+语义层同时读取原生 HTML/ARIA 和 Vue 2、Vue 3、React 组件信息，并识别 Element UI / Ant / Fusion 等组件库的弹窗；
+iframe 里的元素也会合并进来，操作时自动进入对应 frame。
+
+### 6. 失败就是失败
+
+- 整个脚本全部成功才返回退出码 0；找不到元素、断言失败、接口返回非 2xx、超时，都返回非 0。
+- `assert`、`wait text=`、接口回读用来确认“真的保存了”，而不是只看命令有没有跑完。
+- 未知命令、拼错的参数在执行前就报错，不会只执行一半。
+
+### 7. 在页面里直接调接口
+
+- `http GET /api/orders` 在页面上下文里发请求，自动带上页面的 Cookie 和证书，结果可以用 `pick=` 只取需要的字段。
+- `storage get ... as=$token` 读取令牌但**不打印**，再传给后续请求。
+- `extract` 按选择器批量提取结构化数据（标题、链接、价格……）。
+
+### 8. 越用越快：自动把重复操作变成工具
+
+- 带断言、重复成功的操作会被自动参数化，生成 `.webmcp/learned/auto_*.tool.json`，下次一条 `call` 就能完成。
+- `capture` 可以把一次界面操作背后的 HTTP 请求录下来，变成带类型参数的可调用工具（不会保存 Cookie、令牌、密码）。
+- 页面改版导致工具失效时会自动下线；30 天没用的会归档。
+
+### 9. 项目级页面工具 + WebMCP
+
+- 在项目的 `.webmcp` 目录放 JS 片段或 JSON 清单，就成了 `tool call` 可调用的页面工具，跟着项目走、可以提交到仓库。
+- 页面自己通过标准 WebMCP 注册的工具也能直接列出和调用。
+
+### 10. 本地、无账号、为 Agent 准备好
+
+- 不需要任何云服务、账号或模型 API Key；本地服务只监听 `127.0.0.1`，扩展 ID 白名单校验。
+- 附带现成的 [Agent Skill](skills/chrome-shell/SKILL.md)，Claude Code、Codex、OpenCode 等编码 Agent 装上就会用。
+- 可选接入 Jev 快速决策模型，把“在几个已知动作里选一个”的小决策从大模型手里接过来（见[进阶](#进阶页面工具自动学习jev)）。
+
+## 与同类工具对比
+
+下表依据各项目 2026 年 11 月的官方 README / 文档整理，只写文档里能查到的事实；没有做跨工具的速度评测。
+
+|                             | Chrome Semantic Shell                                  | Playwright MCP / playwright-cli          | Chrome DevTools MCP                                  | agent-browser（Vercel） | browser-use                                                         | Stagehand                                    | Claude in Chrome / Gemini in Chrome      |
+| --------------------------- | ------------------------------------------------------ | ---------------------------------------- | ---------------------------------------------------- | ----------------------- | ------------------------------------------------------------------- | -------------------------------------------- | ---------------------------------------- |
+| 形态                        | CLI + Chrome 扩展                                      | MCP 服务 / CLI                           | MCP 服务 + CLI                                       | CLI（Rust）+ MCP        | Python 库 / CLI / MCP                                               | SDK（TS/Python/Go）                          | 浏览器内置侧栏 / 扩展                    |
+| 用你正在用、已登录的 Chrome | ✅ 装扩展即可，不用远程调试、不用重启                  | 需装 Playwright 扩展，或开远程调试接入   | 需开远程调试（Chrome 144+ 可自动连接，连接时要确认） | 需开远程调试 / CDP      | CLI 通过 CDP 接入（需允许远程调试）；Python 方式可能要先退出 Chrome | 需自己提供 CDP 地址                          | ✅                                       |
+| 一次调用多步 + 断言         | ✅ DSL：`&&`、管道、变量、`defer` 清理                 | 一次一个动作；可运行 Playwright 代码片段 | 一次一个工具调用                                     | 有 `batch`              | Agent 模式每步问模型                                                | `act` 每次走模型；也可写 Playwright 风格代码 | 由模型逐步操作                           |
+| 给模型看的页面              | 语义视图（HTML/ARIA + Vue/React 组件），操作后只回变化 | 无障碍快照                               | 无障碍快照                                           | 无障碍快照              | 可交互元素列表 + 截图                                               | 裁剪后的无障碍树                             | 截图 + 页面文字（Claude）；Gemini 未公开 |
+| 需要模型 Key / 云           | 不需要（Jev 可选）                                     | 不需要                                   | 不需要（默认上报使用统计，可关）                     | 本地不需要              | Agent 需要模型 Key                                                  | `act`/`extract`/`observe` 需要模型           | 需要付费订阅，模型在云端                 |
+| 操作复用                    | ✅ 自动学习重复操作 + 录制 HTTP 请求成工具             | 录制成 Playwright 代码                   | 未找到                                               | 录制、会话恢复          | 云端有录制                                                          | 操作缓存仅限 Browserbase 云                  | 可录制快捷操作（Claude 经典侧栏）        |
+| WebMCP                      | ✅ 页面标准 + 项目 `.webmcp` 目录                      | ✅                                       | 实验性                                               | 实验性                  | 未找到                                                              | ✅                                           | 未找到（Gemini 已宣布计划支持）          |
+| 浏览器                      | Chrome / Chromium                                      | Chromium / Firefox / WebKit              | Chrome                                               | Chrome / Chromium       | Chromium                                                            | Chromium                                     | Chrome（Claude 企业版也支持 Edge）       |
+| 许可                        | MIT                                                    | Apache-2.0                               | Apache-2.0                                           | Apache-2.0              | MIT                                                                 | MIT                                          | 商业产品                                 |
+
+**什么时候该选别的：**
+
+- 做跨浏览器的自动化测试、在 CI 里无头运行 → **Playwright**。
+- 排查性能、内存、网络等调试问题 → **Chrome DevTools MCP**。
+- 想要“一句话交给 AI 自己完成”、不写任何脚本 → **browser-use**、**Stagehand** 或 **Claude in Chrome / Gemini in Chrome**。
+- 需要云端大规模并发浏览器 → Browserbase / browser-use Cloud 等云服务。
+
+**本项目最适合：** 让编码 Agent 在你已登录的真实 Chrome 里操作内部系统、后台管理页、需要证书或 SSO 的网站，
+要求快、省 token、出错立刻知道，并希望重复的操作越用越快。
+
+参考：[Playwright MCP](https://playwright.dev/mcp/introduction) ·
+[playwright-cli](https://github.com/microsoft/playwright-cli) ·
+[Chrome DevTools MCP](https://github.com/ChromeDevTools/chrome-devtools-mcp) ·
+[agent-browser](https://github.com/vercel-labs/agent-browser) ·
+[browser-use](https://github.com/browser-use/browser-use) ·
+[Stagehand](https://github.com/browserbase/stagehand) ·
+[Claude in Chrome](https://support.claude.com/en/articles/12012173-get-started-with-claude-in-chrome) ·
+[Gemini in Chrome](https://support.google.com/gemini/answer/16821166)
 
 ## 安装
 
-安装由三部分组成，缺一不可：**CLI**（npm 安装）、**扩展**（加载到 Chrome）、**Native Messaging 注册**（让 Chrome
-能启动 CLI 的 bridge）。Agent Skill 可选。
+需要：Windows / macOS / Linux，Node.js 20+，Google Chrome 或 Chromium。Python 3.10+ 只在使用 Jev 或跑 Python 测试时需要。
 
-### 1. 安装 CLI
+安装分三步，缺一不可：**命令行工具**、**Chrome 扩展**、**注册本地连接**（让 Chrome 能启动命令行工具的桥接进程）。
 
-CLI 已发布到 npm：[`chrome-semantic-shell`](https://www.npmjs.com/package/chrome-semantic-shell)，运行时依赖
-`chrome-semantic-shell-shared` 会自动安装。
+### 1. 安装命令行工具
 
 ```powershell
 npm install -g chrome-semantic-shell
 chrome-shell --version
 ```
 
-国内网络较慢时可以使用镜像（新版本同步通常有几分钟延迟）：
+国内网络慢可以用镜像（新版本通常几分钟后同步）：
 
 ```powershell
 npm install -g chrome-semantic-shell --registry=https://registry.npmmirror.com
 ```
 
-安装后得到两个命令：`chrome-shell`（执行 DSL）和 `chrome-shell-bridge`（注册与诊断）。npm 安装时会自动为当前用户注册
-Native Messaging host。CLI 与扩展请使用同一主版本。
+装好后有两个命令：`chrome-shell`（执行操作）和 `chrome-shell-bridge`（注册与诊断）。npm 安装时会自动注册。
 
-pnpm 10 可能拦截全局包的生命周期脚本，需要手动注册：
+用 pnpm 10 安装时，全局安装脚本可能被拦截，需要手动注册一次：
 
 ```powershell
 pnpm add -g chrome-semantic-shell
 chrome-shell-bridge register
 ```
 
-`chrome-shell-bridge register` 可以重复执行，不确定是否注册成功时直接再跑一次即可。
+没法访问 npm 时，从 [Release](https://github.com/sunfase-io/chrome-semantic-shell/releases/latest) 下载两个 `.tgz`，
+用一条命令一起装：`npm install -g .\chrome-semantic-shell-shared-<版本>.tgz .\chrome-semantic-shell-<版本>.tgz`。
 
-无法访问 npm 仓库时，从 Release 下载 `chrome-semantic-shell-shared-<version>.tgz` 和 `chrome-semantic-shell-<version>.tgz`，
-在同一条命令里一起安装：`npm install -g .\chrome-semantic-shell-shared-<version>.tgz .\chrome-semantic-shell-<version>.tgz`。
+### 2. 加载 Chrome 扩展
 
-### 2. 加载扩展
+1. 从 [最新 Release](https://github.com/sunfase-io/chrome-semantic-shell/releases/latest) 下载 `chrome-semantic-shell-extension-<版本>.zip`，
+   解压到一个**固定目录**（Chrome 每次启动都从这里加载，别删）。
+2. 打开 `chrome://extensions`，打开右上角“开发者模式”。
+3. 点“加载已解压的扩展程序”，选择解压后包含 `manifest.json` 的那一层目录。
+4. 确认扩展 ID 是 `hnhimbinihlfejljamlgfniplabkaamk`（本地连接只认这个 ID）。
 
-1. 从 [最新 Release](https://github.com/sunfase-io/chrome-semantic-shell/releases/latest) 下载
-   `chrome-semantic-shell-extension-<version>.zip`，解压到一个固定目录（Chrome 每次启动都从这里加载，不要删除）。
-2. 打开 `chrome://extensions`，打开右上角的“开发者模式”。
-3. 点击“加载已解压的扩展程序”，选择解压后的目录（包含 `manifest.json` 的那一层）。
-4. 确认扩展 ID 为 `hnhimbinihlfejljamlgfniplabkaamk`，Native host 只接受这个 ID。
+扩展没有工具栏按钮和弹窗，这是有意的，所有操作都在终端完成。
 
-扩展刻意不提供工具栏按钮和弹窗，连接与配置全部在终端完成。
-
-### 3. 注册并连接
+### 3. 注册并验证
 
 ```powershell
 chrome-shell-bridge register
 ```
 
-然后在 `chrome://extensions` 的扩展卡片上点一次“重新加载”，让扩展连接新注册的 host。验证：
+在 `chrome://extensions` 里点一下扩展卡片上的“重新加载”，然后：
 
 ```powershell
-chrome-shell-bridge status
-chrome-shell 'tab list'
+chrome-shell-bridge status   # 应显示 bridge: connected on 127.0.0.1:12306
+chrome-shell 'tab list'      # 应列出你打开的标签页
 ```
 
-`status` 显示 `bridge: connected on 127.0.0.1:12306`、`tab list` 列出当前打开的标签页，即安装成功。
+### 4. 可选：给 Agent 装技能
 
-### 4. 可选：安装 Agent Skill
+从同一个 Release 下载 `chrome-shell-skill-<版本>.zip`，解压后让 `SKILL.md` 位于
+`~/.agents/skills/chrome-shell/SKILL.md`（通用）或 `~/.claude/skills/chrome-shell/SKILL.md`（Claude Code）。
+内容与仓库里的 [`skills/chrome-shell`](skills/chrome-shell) 相同。
 
-如果要让 Claude Code、Codex、OpenCode 等编码 Agent 使用 CLI，从同一个 Release 下载 `chrome-shell-skill-<version>.zip`，
-解压后让 `SKILL.md` 位于：
+### 升级、卸载与常见问题
 
-- `~/.agents/skills/chrome-shell/SKILL.md`（通用 Agent 技能目录），或
-- `~/.claude/skills/chrome-shell/SKILL.md`（Claude Code）
-
-仓库中的 [`skills/chrome-shell`](skills/chrome-shell) 是同一份文件。
-
-### 升级与卸载
-
-- **升级**：`npm install -g chrome-semantic-shell@latest`，执行 `chrome-shell-bridge register`，用新 Release 替换扩展目录后重新加载扩展。
-- **卸载**：在 `chrome://extensions` 移除扩展，执行 `npm uninstall -g chrome-semantic-shell`，再删除 host 清单
-  `com.chromesemanticshell.nativehost.json`：
-  - Windows：`%APPDATA%\Google\Chrome\NativeMessagingHosts\`，以及注册表项
-    `HKCU\Software\Google\Chrome\NativeMessagingHosts\com.chromesemanticshell.nativehost`
+- **升级**：`npm install -g chrome-semantic-shell@latest` → `chrome-shell-bridge register` → 用新 Release 替换扩展目录 → 重新加载扩展。
+  命令行工具和扩展请保持同一个主版本。
+- **卸载**：在 `chrome://extensions` 移除扩展，`npm uninstall -g chrome-semantic-shell`，再删除 `com.chromesemanticshell.nativehost.json`：
+  - Windows：`%APPDATA%\Google\Chrome\NativeMessagingHosts\` 和注册表项 `HKCU\Software\Google\Chrome\NativeMessagingHosts\com.chromesemanticshell.nativehost`
   - macOS：`~/Library/Application Support/Google/Chrome/NativeMessagingHosts/`
   - Linux：`~/.config/google-chrome/NativeMessagingHosts/`
 
-### 常见问题
+| 现象                                   | 处理                                                                                                                          |
+| -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `status` 显示未连接                    | 执行 `chrome-shell-bridge register`，重新加载扩展，确认 Chrome 在运行                                                         |
+| 扩展 ID 不对                           | 加载的不是 Release 原包；原样加载 Release 目录                                                                                |
+| 端口 12306 被占用                      | `chrome-shell-bridge config --port <端口>`，然后重新加载扩展                                                                  |
+| Windows PowerShell 中文乱码、JSON 断裂 | 执行一次 `chrome-shell-bridge shims` 安装 UTF-8 启动器，或先执行 `[Console]::OutputEncoding=[Text.UTF8Encoding]::new($false)` |
+| pnpm 装完找不到命令                    | `pnpm setup` 把全局 bin 加入 `PATH`，新开终端                                                                                 |
+| macOS / Linux 权限错误                 | `chrome-shell-bridge fix-permissions`                                                                                         |
 
-| 现象                                            | 处理                                                                                                                          |
-| ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `status` 显示 bridge 未连接                     | 执行 `chrome-shell-bridge register`，重新加载扩展，并确认 Chrome 正在运行                                                     |
-| 扩展 ID 不是 `hnhimbinihlfejljamlgfniplabkaamk` | 加载的不是 Release 原包；请原样加载 Release 目录，或在 host 清单中放行你的 ID                                                 |
-| 端口 12306 被占用                               | `chrome-shell-bridge config --port <端口>`，然后重新加载扩展                                                                  |
-| Windows PowerShell 中文乱码或 JSON 断裂         | 先执行 `[Console]::OutputEncoding=[Text.UTF8Encoding]::new($false)`，或执行一次 `chrome-shell-bridge shims` 安装 UTF-8 启动器 |
-| pnpm 安装后找不到 `chrome-shell`                | 执行 `pnpm setup` 把 pnpm 全局 bin 加入 `PATH`，然后新开终端                                                                  |
-| macOS/Linux 权限错误                            | `chrome-shell-bridge fix-permissions`                                                                                         |
-
-日志位置：Windows `%LOCALAPPDATA%\chrome-semantic-shell\logs`，macOS `~/Library/Logs/chrome-semantic-shell`，
+日志：Windows `%LOCALAPPDATA%\chrome-semantic-shell\logs`，macOS `~/Library/Logs/chrome-semantic-shell`，
 Linux `~/.local/state/chrome-semantic-shell/logs`。
 
-## 从源码构建
+## 上手：五个常见场景
+
+在 PowerShell 和 bash 里请用**单引号**包住脚本，避免 `$变量` 被 shell 提前替换。
+
+**1. 看页面上有什么可以操作**
+
+```powershell
+chrome-shell 'tab list match=github'
+chrome-shell 'inspect interactive limit=30' --tab 123
+chrome-shell 'inspect forms' --tab 123
+```
+
+输出里每个元素都有 `ref_12` 这样的编号，后续可以直接用 `@ref_12` 操作。
+
+**2. 填表并确认保存成功**
+
+```powershell
+chrome-shell 'fillform 名称=$name 邮箱=$email && select role=combobox name="类型" value="企业" && query role=button name="保存" | click && wait text="保存成功" && assert text="保存成功"' --tab 123 --var 'name=测试' --var 'email=a@example.com'
+```
+
+**3. 在表格的某一行里点按钮**
+
+```powershell
+chrome-shell 'query role=row query="ORDER-001" | query role=button name="查看" scope=pipe | click' --tab 123
+```
+
+**4. 打开临时页面取数据，结束后自动关闭**
+
+```powershell
+chrome-shell 'tab new https://example.com active=false; defer { tab close }; extract css="h1" ; inspect text'
+```
+
+**5. 用页面的登录态直接调接口**
+
+```powershell
+chrome-shell 'http GET /api/orders?status=open pick=data.records' --tab 123
+chrome-shell 'storage get session key=accessToken as=$token && http POST /api/flow/save headers={"accessToken":"$token"} body={"id":1}' --tab 123
+```
+
+长脚本、带 JSON 或 JS 的内容放到文件里执行：`chrome-shell --file job.chrome --fail-fast`；先用 `--dry-run` 只检查语法。
+
+## 命令速查
+
+`chrome-shell help` 离线列出全部命令，`chrome-shell help <命令>` 查看某个命令的完整参数。
+完整语法、选项和输出格式见 [CLI 参考](skills/chrome-shell/references/semantic-shell.md)。
+
+**组合方式**：`;` 或换行——无论成败都继续；`&&`——上一步成功才继续；`||`——上一步失败才执行；`|`——把找到的元素传给下一步。
+
+**定位元素**：`@ref_12`、`role=button name="保存"`（精确）、`name~="保存"`（包含）、`text="保存"`、`css="#save"`、`xpath="..."`。
+
+### 观察页面
+
+| 命令      | 作用                                                                                                     | 示例                                        |
+| --------- | -------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
+| `inspect` | 查看页面：`interactive` 可交互元素、`forms` 表单、`tables` 表格、`dialog` 弹窗、`text` 文字、`full` 全部 | `inspect forms query="供应商" limit=50`     |
+| `query`   | 精确查找元素，找不到就失败                                                                               | `query role=button name="保存"`             |
+| `diff`    | 显示本次脚本中上一次 `inspect` 之后的变化                                                                | `inspect interactive ; click @ref_3 ; diff` |
+| `watch`   | 等待页面发生变化，返回新出现的可操作元素                                                                 | `watch timeout=5000`                        |
+
+### 操作元素
+
+| 命令       | 作用                                   | 示例                                            |
+| ---------- | -------------------------------------- | ----------------------------------------------- |
+| `click`    | 点击                                   | `query "确定" \| click`                         |
+| `dblclick` | 双击                                   | `dblclick text="编辑"`                          |
+| `fill`     | 替换输入框内容，`submit=true` 回车提交 | `fill @ref_2 $value`                            |
+| `type`     | 模拟真实键盘逐字输入（富文本、搜索框） | `type @ref_2 "hello" submit=true`               |
+| `fillform` | 按字段名一次填多个输入框               | `fillform 邮箱=$email 密码=$pwd`                |
+| `select`   | 打开下拉组件并点真实选项               | `select role=combobox name="状态" value="启用"` |
+| `check`    | 勾选 / 取消勾选                        | `check role=checkbox name="启用" value=true`    |
+| `key`      | 按键或组合键                           | `key "Ctrl+S"`                                  |
+| `hover`    | 鼠标悬停                               | `hover role=button name="更多"`                 |
+| `drag`     | 拖拽                                   | `drag @ref_5 @ref_8`                            |
+| `scroll`   | 滚动页面、滚到元素或滚动某个容器       | `scroll down 600`、`scroll @ref_40`             |
+| `upload`   | 上传文件                               | `upload css="#file" file=$path`                 |
+
+### 导航、标签页、等待与断言
+
+| 命令       | 作用                                           | 示例                                       |
+| ---------- | ---------------------------------------------- | ------------------------------------------ |
+| `navigate` | 打开网址，遇到网络错误页会失败                 | `navigate https://example.com`             |
+| `back`     | 后退                                           | `back`                                     |
+| `forward`  | 前进                                           | `forward`                                  |
+| `reload`   | 刷新                                           | `reload`                                   |
+| `tab`      | 列出 / 新建 / 切换 / 关闭标签页                | `tab new https://example.com active=false` |
+| `window`   | 列出窗口及其标签页                             | `window`                                   |
+| `wait`     | 等待文字、元素、网址变化、导航或网络空闲       | `wait text="完成" timeout=10000`           |
+| `assert`   | 断言文字存在 / 元素存在 / 元素可见             | `assert text="保存成功"`                   |
+| `dialog`   | 处理浏览器原生弹窗（alert / confirm / prompt） | `dialog accept`                            |
+
+### 数据与接口
+
+| 命令      | 作用                                                | 示例                                                      |
+| --------- | --------------------------------------------------- | --------------------------------------------------------- |
+| `http`    | 用页面登录态发请求，`pick=` 只取需要的字段          | `http GET /api/items pick=data.records as=$rows`          |
+| `extract` | 按选择器提取结构化数据                              | `extract css=".row" fields={"title":"a","href":"a@href"}` |
+| `storage` | 读 localStorage / sessionStorage / Cookie，值不打印 | `storage get session key=token as=$token`                 |
+| `js`      | 执行一段 JavaScript（最后手段）                     | `js "location.href"`                                      |
+
+### 诊断与产物
+
+| 命令         | 作用                                           | 示例                                           |
+| ------------ | ---------------------------------------------- | ---------------------------------------------- |
+| `screenshot` | 截图（整页、元素或后台标签页），不走浏览器下载 | `screenshot full=true`                         |
+| `console`    | 读取页面控制台消息                             | `console buffer --errors`                      |
+| `network`    | 抓取接口请求和响应                             | `network start url=/api/ ; ... ; network stop` |
+| `download`   | 等待并确认下载完成                             | `click @ref_9 && download timeout=30000`       |
+
+### 流程控制
+
+| 命令    | 作用                           | 示例                                          |
+| ------- | ------------------------------ | --------------------------------------------- |
+| `set`   | 设置变量                       | `set $ids=["1","2"]`                          |
+| `if`    | 按上一步结果或变量分支         | `if failure { screenshot }`                   |
+| `for`   | 循环（最多 100 次）            | `for $id in $ids { query text=$id \| click }` |
+| `defer` | 收尾：成功、失败、超时都会执行 | `defer { tab close }`                         |
+
+### 工具与学习
+
+| 命令      | 作用                                                | 示例                                                                |
+| --------- | --------------------------------------------------- | ------------------------------------------------------------------- |
+| `tool`    | 列出 / 调用页面工具（项目 `.webmcp` 与页面 WebMCP） | `tool ls`                                                           |
+| `call`    | `tool call` 的简写                                  | `call lookup_order input={"id":"1001"}`                             |
+| `capture` | 把一次操作背后的 HTTP 请求录成可调用工具            | `capture begin ; ... ; capture end name=x ; capture publish name=x` |
+| `learn`   | 查看 / 立即维护自动学习的工具（单独执行）           | `learn status`                                                      |
+
+### 命令行选项
+
+| 选项                                      | 作用                               |
+| ----------------------------------------- | ---------------------------------- |
+| `--tab <id>` / `--window <id>`            | 指定目标标签页 / 窗口              |
+| `--var k=v`、`--vars-file`、`--vars-json` | 传入变量（`--var` 优先）           |
+| `--file <path>` / `--stdin`               | 从文件 / 标准输入读取脚本          |
+| `--fail-fast`                             | 任一步失败立即停止（`;` 分隔也停） |
+| `--dry-run`                               | 只检查语法和参数，不操作页面       |
+| `--timeout <ms>`                          | 整个脚本的超时（最大 280000）      |
+| `--output compact\|json\|debug`           | 输出格式；`--out <file>` 写入文件  |
+| `--quiet`                                 | 不输出变化报告                     |
+| `-C, --workspace <path>`                  | 指定 `.webmcp` 工具所在的项目目录  |
+| `--timing`                                | 打印往返耗时                       |
+
+`chrome-shell-bridge` 子命令：`register`（注册）、`status`（连接状态）、`config`（端口与默认超时）、
+`shims`（安装 UTF-8 启动器）、`fix-permissions`（修复权限）。
+
+## 进阶：页面工具、自动学习、Jev
+
+**项目页面工具**：在项目的 `.webmcp` 目录放 JS 片段（开头写 `// tool: 名称`）或 JSON 清单，即可 `tool call` 调用；
+只读工具加 `// readonly: true`。用 `-C <项目目录>` 指定位置。
+
+```powershell
+chrome-shell -C D:\project 'tool ls'
+chrome-shell -C D:\project 'tool call lookup_order input={"id":"1001"}'
+```
+
+**自动学习**（默认开启）：带最终断言、重复成功的操作会生成 `.webmcp/learned/auto_*.tool.json`，带输入参数、
+网址范围和依赖指纹；默认最多 32 个活动工具，30 天未用归档，只删除自己生成且未被人工修改的文件。
+配置在技能的 `config.json` 或项目的 `.chrome-shell/config.json`：
+
+```json
+{ "learning": { "enabled": true, "minSuccesses": 2, "maxActive": 32, "idleDays": 30 } }
+```
+
+详见 [自动操作记忆](skills/chrome-shell/references/automatic-learning.md) 与 [设计说明](docs/automatic-operation-memory.md)。
+
+**Jev 快速决策**（可选）：Jev 是 TypeSafe 的类型化决策模型。对于“在几个已知动作里选下一步”这类小决策，
+本地运行器把当前页面的精简信息交给 Jev 选择，然后直接执行并断言，不必每一步都回到大模型；
+没把握时交回大模型，不猜。需要自备 API Key，配置见 [Jev 本地闭环](skills/chrome-shell/references/jev-fast-loop.md)。
+
+```powershell
+python skills/chrome-shell/scripts/jev_flow.py plan.json --tab 123 --workspace D:\project --dry-run
+```
+
+## 实测数据
+
+2026-09-21，本机同一个 localhost 表单页面，每种方式跑三轮、交替顺序，并回读服务端确认数据真的保存了：
+
+| 执行方式                  | 浏览器请求次数 |    中位耗时 |
+| ------------------------- | -------------: | ----------: |
+| 分 6 次 CLI 调用          |              6 |    1457.9ms |
+| 合成 1 次 CLI 调用        |              1 |     722.2ms |
+| 1 次持久 HTTP 连接批处理  |              1 | **635.0ms** |
+| 两次 Jev 决策 + 持久 HTTP |              3 |    2420.7ms |
+
+合并成一次调用后耗时减少约 **56%**。这是本项目不同执行方式之间的对比，不是与其他工具的对比，也不代表所有网站。
+
+测试覆盖：离线/组件测试和 37 项真实 Chrome 回归，涵盖定位、表单、iframe、导航、等待、下载、录制、Jev、自动学习和失败处理。
+见 [测试说明](tests/browser-automation/README.md)、[性能原始数据](docs/browser-performance-keepalive-2026-09-21.json)、
+[回归结果](docs/browser-regression-final-2026-09-21.json)。
+
+## 工作原理与安全边界
+
+```text
+Agent / 终端
+  → chrome-shell（命令行）
+  → 本机 127.0.0.1 HTTP
+  → Native Messaging（Chrome 官方的本地程序通信机制）
+  → 你 Chrome 里的扩展，在页面中执行
+```
+
+- 本地服务只监听 `127.0.0.1`，命令行只接受回环地址。
+- Native host 只接受白名单内的扩展 ID。
+- 录制的操作不保存 Authorization、Cookie、token、secret、password。
+- 项目工具目录按真实路径校验，拒绝符号链接越界。
+- CI 每次运行生产依赖漏洞审计。
+
+更多：[Semantic Shell 总览](docs/SEMANTIC_SHELL.md) ·
+[论文与开源项目研究](docs/browser-automation-research-2026-09-21.md)
+
+## 开发与发布
+
+从源码构建：
 
 ```powershell
 git clone https://github.com/sunfase-io/chrome-semantic-shell.git
@@ -162,268 +449,30 @@ pnpm add -g "$release\chrome-semantic-shell-shared-$v.tgz" "$release\chrome-sema
 chrome-shell-bridge register
 ```
 
-以“加载已解压的扩展程序”方式加载 `dist-extension/chrome-mv3`，重新加载后用 `chrome-shell-bridge status` 验证。
-内置的 manifest key 保证源码构建与 Release 版扩展 ID 一致。
+然后以“加载已解压的扩展程序”加载 `dist-extension/chrome-mv3`。内置的 manifest key 保证扩展 ID 与 Release 版一致。
 
-## 基本使用
-
-PowerShell 和 POSIX shell 中建议使用单引号包裹 DSL，避免 `$variables` 被 shell 提前展开。
-
-```powershell
-chrome-shell 'tab list'
-chrome-shell 'inspect interactive limit=30'
-chrome-shell 'fillform 邮箱=$email && query role=button name="登录" | click && wait text="仪表盘" timeout=10000 && assert text="仪表盘"' --tab 123 --var 'email=user@example.com'
-```
-
-精确选择组件下拉：
-
-```powershell
-chrome-shell 'select role=combobox name="所属系统" value="加工事业部贸易" && inspect forms query="所属系统"' --tab 123
-```
-
-唯一定位表格行，并把后续查询限制在该行：
-
-```powershell
-chrome-shell 'query role=row query="ROLE_003" | query role=button name="设置工作流角色" scope=pipe | click'
-```
-
-无论成功、失败或超时都执行清理：
-
-```powershell
-chrome-shell 'tab new https://example.com; defer { tab close }; inspect interactive; assert text="Example Domain"'
-```
-
-指定后台 tab：
-
-```powershell
-chrome-shell 'inspect forms' --tab 123
-```
-
-完整语法见
-[`skills/chrome-shell/references/semantic-shell.md`](skills/chrome-shell/references/semantic-shell.md)。
-
-依赖步骤使用 `&&`，其中一步失败就停止后续写入；`;` 会在失败后继续，不是 fail-fast 分隔符。
-同一 tab 的写操作串行，在下一个未知弹窗或页面状态处重新观察。长 JSON/JS 使用 `--file` 与
-`--vars-file`，先 `--dry-run` 校验语法；已成功的写入不会因后续失败而自动回滚。
-
-## 无 UI 配置
-
-```powershell
-chrome-shell-bridge status
-chrome-shell-bridge config
-chrome-shell-bridge config --port 12307
-chrome-shell-bridge config --timeout 45000
-```
-
-修改端口后重载扩展一次。单次调用可使用 `--timeout`、`--endpoint` 或 `CHROME_SHELL_PORT` 覆盖默认值。
-
-持久配置文件位置：
-
-```text
-Windows: %LOCALAPPDATA%\chrome-semantic-shell\config.json
-macOS:   ~/Library/Application Support/chrome-semantic-shell/config.json
-Linux:   $XDG_CONFIG_HOME/chrome-semantic-shell/config.json
-```
-
-不需要手动关联客户端：扩展重载后会根据固定 extension ID 和 Native host 注册自动连接。
-
-## Workspace page tools
-
-使用 `-C` 从项目 `.webmcp` 目录发现片段和已捕获操作：
-
-```powershell
-chrome-shell -C D:\project 'tool ls'
-chrome-shell -C D:\project 'tool call lookup_order input={"id":"1001"}'
-```
-
-确定只读的片段使用 `// readonly: true`，manifest 使用 `"readOnly": true`。纯只读程序会跳过页面前后变化观察。
-
-## 自动学习、复用与淘汰
-
-自动操作记忆默认开启，普通 `chrome-shell` 使用就能积累证据，无需另发“生成脚本”的指令：
-
-```text
-成功且有最终断言的批次
-  → 提取稳定操作、参数化输入
-  → 重复成功验证
-  → .webmcp/learned/auto_*.tool.json
-  → 复用反馈、依赖检查、新版本或归档淘汰
-```
-
-有输入的模板默认需要两次成功且输入样例不同；静态无输入操作需要重复成功。
-生成文件使用 `semantic-sequence`，带输入 schema、精确 URL 作用域和依赖指纹。任务开始可用
-`tool ls` 查找已有操作，再按其 schema 调用：
-
-```powershell
-chrome-shell -C D:\project 'tool ls'
-chrome-shell -C D:\project --tab 123 'call auto_<实际名称> input={"arg1":"实际值"}'
-chrome-shell -C D:\project 'learn status'
-```
-
-生命周期为 `candidate → active → quarantined/retired`，人工修改冲突记为 `conflict`：
-
-- 结构性失效或依赖变化时，旧生成文件退出活动目录；新的成功证据能形成新版本。
-- 默认最多 **32** 个活动工具，**30 天未复用**归档淘汰；只删除已登记且内容指纹匹配的生成文件。
-- 索引与归档位于 `.chrome-shell/learning/`；不保存输入样本值。
-- 学习和磁盘维护走后台队列；重启后首次访问已有索引的 workspace 会恢复维护。
-
-全局配置位于已安装技能的 `chrome-shell/config.json`，workspace 可用 `.chrome-shell/config.json` 覆盖：
-
-```json
-{ "learning": { "enabled": true, "minSuccesses": 2, "maxActive": 32, "idleDays": 30 } }
-```
-
-首版保守处理跨 URL 泛化，不自动发布任意 JS、旧 ref、凭据或无可靠断言的片段。
-`learn maintain` 可立即维护，但正常学习不依赖手工触发。
-详见 [自动操作记忆](skills/chrome-shell/references/automatic-learning.md) 与[设计说明](docs/automatic-operation-memory.md)。
-
-## Jev 快速决策：介绍与配置
-
-Jev 是 TypeSafe 提供的类型化决策模型。在本项目中，它根据当前语义观察，从宿主事先定义的合法动作中
-选择下一步；程序执行、前置检查和结果断言仍由本地运行器负责。
-
-- **确定操作**直接执行 DSL、API 或已有工具，连续节点合并成一个批次。
-- **语义分支**交给 Jev，选择动作后直接执行，不必每一步返回宿主大模型。
-- **未知流程、缺失证据或低置信度**返回宿主处理，不猜测动作、不静默更换模型。
-
-### 1. 安装客户端并配置 API
-
-运行器复用已有 [Jev skill](https://github.com/wuyoscar/jev-skill) 的配置加载、请求校验和决策解释。
-默认客户端路径为 `~/.agents/skills/jev/scripts/jev.py`。
-
-在仓库之外创建 `~/.agents/jev/config.json`，填入自己的 API Key：
-
-```json
-{
-  "api_url": "https://api.typesafe.ai/v1/systemone",
-  "api_key": "<YOUR_JEV_API_KEY>",
-  "model": "jev-latest"
-}
-```
-
-`api_url` 使用兼容 `POST /v1/systemone` 的地址；实际请求始终以配置文件为准。
-API Key 留在本机，不放入计划、README 或提交。
-
-### 2. 配置开关、连接与预算
-
-编辑 [`skills/chrome-shell/config.json`](skills/chrome-shell/config.json)，或已安装技能中的同名文件：
-
-```json
-{
-  "jev": {
-    "enabled": true,
-    "keepalive": true,
-    "config_file": "~/.agents/jev/config.json",
-    "skill_script": "~/.agents/skills/jev/scripts/jev.py",
-    "timeout_seconds": 8,
-    "min_probability": 0.85,
-    "min_margin": 0.2
-  },
-  "learning": { "enabled": true, "minSuccesses": 2, "maxActive": 32, "idleDays": 30 },
-  "browser_timeout_ms": 10000,
-  "max_steps": 8
-}
-```
-
-`jev.enabled=false` 关闭 Jev 决策，普通 CLI 和自动学习仍可使用。
-`keepalive=true` 使用直接持久 HTTPS 连接；需要系统代理时明确设为 `false`，使用原客户端的 urllib 路径。
-概率阈值是停止判断的启发式，不是准确率保证。
-
-### 3. 检查并运行
-
-```powershell
-python "$HOME/.agents/skills/jev/scripts/jev.py" config-check
-python skills/chrome-shell/scripts/jev_flow.py plan.json --tab 123 --workspace D:\project --dry-run
-python skills/chrome-shell/scripts/jev_flow.py plan.json --tab 123 --workspace D:\project --vars-file private-values.json
-```
-
-计划由宿主基于真实页面定义 `goal`、`acceptance`、`allowed_origins` 和节点，每个动作都有
-`guard/program/verify`。运行器要求扩展协议 **3**，默认只把必要节点信息发送给 Jev；控件 value、
-程序输入值及 URL 凭据/query/hash 不进入自动构造的模型证据。标题、候选名称和自定义 context 仍应按任务裁剪。
-
-退出码：`0` 验证通过，`2` 需要宿主判断，`1` 配置或执行失败。`--dry-run` 检查语法，不执行浏览器动作或调用 Jev。
-完整计划示例与边界见 [Jev 本地闭环](skills/chrome-shell/references/jev-fast-loop.md)。
-
-## 实测结果与会话回归
-
-2026-09-21，同一 localhost 表单夹具、每种路径三轮，交替顺序运行并核对服务端实际保存的数据：
-
-| 执行方式                        | 浏览器请求数 |     中位耗时 |
-| ------------------------------- | -----------: | -----------: |
-| 逐条 CLI                        |            6 |     1457.9ms |
-| CLI 批处理                      |            1 |      722.2ms |
-| 持久 HTTP 批处理                |            1 |  **635.0ms** |
-| 两次 Jev 决策 + 持久浏览器 HTTP |            3 | **2420.7ms** |
-
-表单路径耗时降低约 **56.4%**，约 **2.30 倍快**。两次 Jev 决策的浏览器部分约 0.43s，其余主要为 API 调用。
-这是执行路径对照，不是主模型 A/B，也不是所有网站或 p95/p99 的速度保证。
-
-本次回执包括 **162 项离线/组件测试**和 **37 项真实 Chrome 合成回归**，覆盖定位、表单、iframe、导航、
-等待、下载、捕获、Jev、自动学习与失败处理。`tests/browser-automation/coverage.json` 将功能映射到会话证据及测试；
-`docs/analysis/session_inventory.py` 支持后续新会话、旧会话追加和已有消息修改的增量分析。
-
-- [测试入口与依赖](tests/browser-automation/README.md)
-- [性能原始数据](docs/browser-performance-keepalive-2026-09-21.json)
-- [真实浏览器回归结果](docs/browser-regression-final-2026-09-21.json)
-
-## 开发验证
+验证：
 
 ```powershell
 pnpm typecheck
 pnpm lint
 pnpm --filter chrome-semantic-shell-extension test
 pnpm --filter chrome-semantic-shell test
-pnpm --filter chrome-semantic-shell run test:coverage
 python -m unittest discover -s skills/chrome-shell/evals -p "test_*.py" -v
 python -m unittest discover -s tests/browser-automation -p "test_*.py" -v
-pnpm audit --prod
-pnpm build
 ```
 
-构建产物：
+新增或修改命令时，同步更新 `chrome-shell help`、本 README 两个语言版本的“命令速查”和
+[CLI 参考](skills/chrome-shell/references/semantic-shell.md)；测试会检查三处是否覆盖全部命令，漏了 CI 会失败。
 
-- 扩展：`dist-extension/chrome-mv3`
-- Native CLI：`app/native-server/dist`
+**发布是自动的**：把 `app/native-server`、`packages/shared`、`app/chrome-extension` 三个 `package.json` 的 `version`
+改成同一个新版本号，推送到 `master`。CI 校验通过后会自动：
 
-## 发布
+1. 打上 `v<版本>` 标签并创建 GitHub Release，附带扩展 zip、技能 zip 和两个 npm 包；
+2. 通过 npm [Trusted Publishing](https://docs.npmjs.com/trusted-publishers/) 发布到 npm（不存 token，自动附带来源证明）。
 
-推送与 Native 包版本一致的 tag：
-
-```powershell
-git tag v1.0.1
-git push origin v1.0.1
-```
-
-GitHub Actions 会完成校验和离线回归，打包扩展、Agent Skill、shared runtime 与 Native CLI，创建 GitHub Release，
-再通过 [Trusted Publishing](https://docs.npmjs.com/trusted-publishers/)（GitHub OIDC，不存 token，自动附带 provenance）
-依次发布 `chrome-semantic-shell-shared` 与 `chrome-semantic-shell` 到 npm。npm 上已存在的版本会跳过。
-
-维护者发布清单：
-
-1. 同时修改 `app/native-server/package.json` 与 `packages/shared/package.json` 的 `version`，tag 必须等于 `v<version>`。
-2. 两个 npm 包都要信任 `sunfase-io` / `chrome-semantic-shell` / `build-release.yml`
-   （npmjs.com → 包 → **Settings → Trusted publishing**），否则 npm 发布步骤会失败。
-3. 若 npm 把版本放进 staged publishing，需在 npmjs.com 的 **Staged Packages** 中用两步验证批准，批准前无法安装。
-4. 工作流结束后用 `npm view chrome-semantic-shell version` 和 Release 附件确认结果。
-
-## 安全边界
-
-- 命令 endpoint 只接受 loopback HTTP URL。
-- Workspace 发现与发布会拒绝 realpath/symlink 越界。
-- 捕获操作不会持久化 Authorization、Cookie、token、secret 或 password。
-- Native host 只接受 allowlist 内的扩展 ID。
-- CI 会执行生产依赖漏洞审计。
-
-## 文档
-
-- [Semantic Shell 总览](docs/SEMANTIC_SHELL.md)
-- [Agent Skill](skills/chrome-shell/SKILL.md)
-- [完整 CLI 参考](skills/chrome-shell/references/semantic-shell.md)
-- [Jev 介绍、配置与计划契约](skills/chrome-shell/references/jev-fast-loop.md)
-- [自动操作记忆](skills/chrome-shell/references/automatic-learning.md)
-- [论文、开源项目与会话研究](docs/browser-automation-research-2026-09-21.md)
-- [会话驱动测试](tests/browser-automation/README.md)
+版本号没变的推送只跑校验，不发版；npm 上已存在的版本会跳过。
 
 ## 许可证
 
-[MIT](LICENSE)
+[MIT](LICENSE)。本项目基于 [hangwin/mcp-chrome](https://github.com/hangwin/mcp-chrome) 演进而来。

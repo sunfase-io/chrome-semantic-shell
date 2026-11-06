@@ -134,6 +134,7 @@ for $id in $ids { query text=$id | click }
 if $confirmed { query "提交" | click } else { assert text="未确认" }
 if success { assert text="成功" }
 if failure { screenshot }
+defer { tab close }
 extract css="#order-id" as=$orderId
 extract css=".row" fields={"title":"a","href":"a@href","price":".price"} as=$rows
 extract @ref_12 attr=href
@@ -152,6 +153,7 @@ tab list match=example
 tab new https://example.com active=false timeout=20000
 tab switch 123
 tab close 123
+window
 wait 500
 wait navigation
 wait network
@@ -252,6 +254,11 @@ net POST /api/order 200 143ms
 `--output json` prints one JSON document: `ok`, `tabId`, `durationMs`, `steps[]` (`command`, `status`, `detail`, `value`, `durationMs`), `state`, `delta`, `error`, plus `artifacts[]` paths and `notes[]`. `detail` keeps the raw tool text for existing consumers; `value` is the decoded result of `js`, `http`, `tool call`, `extract`, `tab list` and `network stop`. Parse it in PowerShell with `($r = chrome-shell ... --output json | ConvertFrom-Json).steps[0].value`. `debug` adds the parser AST and internal action logs. Any failed step sets exit code `1`.
 
 ## Automatic Learning and Correlation
+
+```text
+learn status
+learn maintain
+```
 
 Successful asserted stable batches are automatically parameterized and published after repeated evidence. `learn status` shows candidates, active/quarantined/retired states and errors; `learn maintain` requests immediate maintenance. Generated tools use `kind: "semantic-sequence"` with a typed inputSchema, exact URL scope and dependency fingerprints. See [automatic-learning.md](automatic-learning.md).
 

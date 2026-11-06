@@ -61,7 +61,8 @@ export function inlineJavascriptFiles(
       const file = command.options.file;
       if (command.name !== 'js' || file === undefined) continue;
       if (typeof file !== 'string' || !file) throw new Error('js file= expects a path');
-      if (command.options.code !== undefined) throw new Error('js accepts code= or file=, not both');
+      if (command.options.code !== undefined)
+        throw new Error('js accepts code= or file=, not both');
       const name = `__js_file_${Object.keys(vars).length + 1}`;
       vars[name] = readFile(file);
       const at = script.indexOf(command.raw, cursor);
@@ -78,30 +79,48 @@ export function inlineJavascriptFiles(
 }
 
 const COMMAND_HELP: Record<string, string> = {
-  inspect: 'inspect [interactive|forms|tables|dialog|text|full] [query=TEXT] [role=R] [name=EXACT] [name~=PART] [limit=N] [scope=pipe|@ref] [frame=N]',
-  query: 'query ["TEXT"|query=TEXT] [role=R] [name=EXACT] [name~=PART] [css=SEL] [nth=I] [mode=...] — fails on 0 matches',
+  inspect:
+    'inspect [interactive|forms|tables|dialog|text|full] [query=TEXT] [role=R] [name=EXACT] [name~=PART] [limit=N] [scope=pipe|@ref] [frame=N]',
+  query:
+    'query ["TEXT"|query=TEXT] [role=R] [name=EXACT] [name~=PART] [css=SEL] [nth=I] [mode=...] — fails on 0 matches',
+  diff: 'diff  — changes since the earlier inspect in this program',
+  watch: 'watch [timeout=MS]  — waits for a semantic page change and returns actionable nodes',
   click: 'click @ref | <piped node> | role=R name=N | text=T | css=SEL [frame=N]',
+  dblclick: 'dblclick @ref | <piped node> | role=R name=N | text=T | css=SEL [frame=N]',
+  check: 'check @ref | role=checkbox name=N [value=true|false] [frame=N]',
+  drag: 'drag @start @end [frame=N]',
   fill: 'fill @ref VALUE | fill role=textbox name=N value=V [submit=true]',
   type: 'type @ref "text" [submit=true]  — trusted keystrokes via CDP; appends at the caret',
   fillform: 'fillform LABEL=VALUE ...',
-  select: 'select role=combobox name=N value=V [timeout=MS]  — opens the component, clicks the real option',
+  select:
+    'select role=combobox name=N value=V [timeout=MS]  — opens the component, clicks the real option',
   key: 'key "Ctrl+S" | key Enter [@ref|css=SEL]  — defaults to the last filled/typed element',
-  scroll: 'scroll up|down|left|right [PX] | scroll top|bottom | scroll @ref | query ... | scroll down 300',
+  scroll:
+    'scroll up|down|left|right [PX] | scroll top|bottom | scroll @ref | query ... | scroll down 300',
   hover: 'hover @ref | role=R name=N | css=SEL',
   upload: 'upload css=SEL file=PATH | upload @ref file=["a","b"]',
-  screenshot: 'screenshot [@ref|css=SEL|role=R name=N] [full=true]  — CDP capture of the target tab, no downloads',
+  screenshot:
+    'screenshot [@ref|css=SEL|role=R name=N] [full=true]  — CDP capture of the target tab, no downloads',
   js: 'js code="return document.title" | js "location.href" | js file=PATH.js [frame=N] [max=BYTES]  — VARS holds program variables',
   http: 'http [GET|POST|...] URL [headers={...}] [body=JSON|form={...}] [pick=path|[paths]|{alias:path}] [as=$v] [context=page|extension]',
   storage: 'storage get local|session|cookie key=NAME as=$var  — value is never printed',
-  extract: 'extract css=SEL [attr=text|html|value|href|NAME] [all=true] [fields={"k":"sel@attr"}] [as=$v] | extract @ref',
+  extract:
+    'extract css=SEL [attr=text|html|value|href|NAME] [all=true] [fields={"k":"sel@attr"}] [as=$v] | extract @ref',
   wait: 'wait MS | wait text=T | wait selector=SEL [state=visible|attached|detached] | wait url~=PART | wait navigation | wait network [timeout=MS]',
   assert: 'assert text=T | assert exists=SEL | assert visible=SEL',
   tab: 'tab list [match=TEXT] | tab new URL [active=false] [timeout=MS] | tab switch ID | tab close [ID]',
   navigate: 'navigate URL  — fails on a network error page',
+  back: 'back  — history back in the target tab',
+  forward: 'forward  — history forward in the target tab',
+  reload: 'reload  — reload the target tab',
+  window: 'window  — list windows with their tabs',
+  console: 'console [buffer|snapshot] [--errors]  — page console messages',
+  learn: 'learn status | learn maintain  — automatic operation memory state; run it on its own',
   tool: 'tool ls | tool call NAME input={...} [timeout=MS] [max=BYTES]',
   call: 'call NAME input={...} [timeout=MS] [max=BYTES]',
   network: 'network start [body=true] [url=PART] ; network stop [url=PART] [limit=N]',
-  capture: 'capture begin [body=true] ; capture end name=N ; capture publish name=N bindings={...} [allowConstants]',
+  capture:
+    'capture begin [body=true] ; capture end name=N ; capture publish name=N bindings={...} [allowConstants]',
   download: 'download [timeout=MS] [filename=PREFIX]',
   dialog: 'dialog accept|dismiss [text=PROMPT]',
   defer: 'defer { commands }  — cleanup that runs after success, failure or timeout',
@@ -116,11 +135,13 @@ export function renderCommandHelp(name?: string): string {
     const usage = COMMAND_HELP[name];
     const options = SHELL_COMMAND_OPTIONS[name];
     if (!usage && !options) throw new Error(`unknown command "${name}"; run chrome-shell help`);
-    return [usage || name, options ? `options: ${options.join(', ') || 'none'}` : ''].filter(Boolean).join('\n');
+    return [usage || name, options ? `options: ${options.join(', ') || 'none'}` : '']
+      .filter(Boolean)
+      .join('\n');
   }
   return [
     'Semantic Shell commands (chrome-shell help <command> for details):',
-    ...Object.keys(SHELL_COMMAND_OPTIONS).filter((command) => command !== 'learn').map((command) => `  ${COMMAND_HELP[command] || command}`),
+    ...Object.keys(SHELL_COMMAND_OPTIONS).map((command) => `  ${COMMAND_HELP[command]}`),
     'Composition: ";"/newline continue, "&&" on success, "||" on failure, "|" pipes nodes. Quote values with spaces.',
   ].join('\n');
 }
@@ -180,7 +201,10 @@ export async function formatCommandResult(
     let document: Record<string, unknown>;
     try {
       const parsed = JSON.parse(texts[0] ?? '');
-      document = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : { ok: !isError, text: texts[0] };
+      document =
+        parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+          ? parsed
+          : { ok: !isError, text: texts[0] };
     } catch {
       document = { ok: !isError, ...(texts[0] ? { error: texts[0] } : {}) };
     }
