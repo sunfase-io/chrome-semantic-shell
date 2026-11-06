@@ -157,7 +157,8 @@ $release = Join-Path $PWD "release"
 New-Item -ItemType Directory -Force $release | Out-Null
 pnpm --dir packages/shared pack --pack-destination $release
 pnpm --dir app/native-server pack --pack-destination $release
-pnpm add -g "$release\chrome-semantic-shell-shared-1.0.0.tgz" "$release\chrome-semantic-shell-1.0.0.tgz" --ignore-scripts
+$v = node -p "require('./app/native-server/package.json').version"
+pnpm add -g "$release\chrome-semantic-shell-shared-$v.tgz" "$release\chrome-semantic-shell-$v.tgz" --ignore-scripts
 chrome-shell-bridge register
 ```
 
@@ -389,8 +390,8 @@ pnpm build
 推送与 Native 包版本一致的 tag：
 
 ```powershell
-git tag v1.0.0
-git push origin v1.0.0
+git tag v1.0.1
+git push origin v1.0.1
 ```
 
 GitHub Actions 会完成校验和离线回归，打包扩展、Agent Skill、shared runtime 与 Native CLI，创建 GitHub Release，

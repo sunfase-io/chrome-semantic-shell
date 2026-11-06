@@ -1,6 +1,6 @@
 {
   "name": "chrome-semantic-shell",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Local bridge and CLI for Chrome Semantic Shell",
   "main": "dist/index.js",
   "bin": {

@@ -161,7 +161,8 @@ $release = Join-Path $PWD "release"
 New-Item -ItemType Directory -Force $release | Out-Null
 pnpm --dir packages/shared pack --pack-destination $release
 pnpm --dir app/native-server pack --pack-destination $release
-pnpm add -g "$release\chrome-semantic-shell-shared-1.0.0.tgz" "$release\chrome-semantic-shell-1.0.0.tgz" --ignore-scripts
+$v = node -p "require('./app/native-server/package.json').version"
+pnpm add -g "$release\chrome-semantic-shell-shared-$v.tgz" "$release\chrome-semantic-shell-$v.tgz" --ignore-scripts
 chrome-shell-bridge register
 ```
 
@@ -395,8 +396,8 @@ Build output:
 Push a tag matching the Native package version:
 
 ```powershell
-git tag v1.0.0
-git push origin v1.0.0
+git tag v1.0.1
+git push origin v1.0.1
 ```
 
 GitHub Actions verifies the repository and offline regressions, packages the extension, agent skill, shared runtime,

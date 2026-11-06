@@ -1,6 +1,6 @@
 {
   "name": "chrome-semantic-shell-shared",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Shared protocol types and constants for Chrome Semantic Shell",
   "author": "sunfase",
   "license": "MIT",
