@@ -111,5 +111,5 @@ jobs:
               npm publish "$2" --access public
             fi
           }
-          publish chrome-semantic-shell-shared release/chrome-semantic-shell-shared-${VERSION}.tgz
-          publish chrome-semantic-shell release/chrome-semantic-shell-${VERSION}.tgz
+          publish chrome-semantic-shell-shared ./release/chrome-semantic-shell-shared-${VERSION}.tgz
+          publish chrome-semantic-shell ./release/chrome-semantic-shell-${VERSION}.tgz
