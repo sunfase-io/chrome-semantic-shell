@@ -1,5 +1,9 @@
 # Chrome Semantic Shell
 
+[![npm](https://img.shields.io/npm/v/chrome-semantic-shell)](https://www.npmjs.com/package/chrome-semantic-shell)
+[![release](https://img.shields.io/github/v/release/sunfase-io/chrome-semantic-shell)](https://github.com/sunfase-io/chrome-semantic-shell/releases/latest)
+[![license](https://img.shields.io/github/license/sunfase-io/chrome-semantic-shell)](LICENSE)
+
 [English](README.md) | 简体中文
 
 Chrome Semantic Shell 是一个本地优先、CLI-first 的浏览器自动化运行时，直接操作用户正在使用的 Chrome
@@ -54,12 +58,22 @@ Agent / terminal
 
 ### 1. 安装 CLI
 
+CLI 已发布到 npm：[`chrome-semantic-shell`](https://www.npmjs.com/package/chrome-semantic-shell)，运行时依赖
+`chrome-semantic-shell-shared` 会自动安装。
+
 ```powershell
 npm install -g chrome-semantic-shell
+chrome-shell --version
+```
+
+国内网络较慢时可以使用镜像（新版本同步通常有几分钟延迟）：
+
+```powershell
+npm install -g chrome-semantic-shell --registry=https://registry.npmmirror.com
 ```
 
 安装后得到两个命令：`chrome-shell`（执行 DSL）和 `chrome-shell-bridge`（注册与诊断）。npm 安装时会自动为当前用户注册
-Native Messaging host。
+Native Messaging host。CLI 与扩展请使用同一主版本。
 
 pnpm 10 可能拦截全局包的生命周期脚本，需要手动注册：
 
@@ -69,6 +83,9 @@ chrome-shell-bridge register
 ```
 
 `chrome-shell-bridge register` 可以重复执行，不确定是否注册成功时直接再跑一次即可。
+
+无法访问 npm 仓库时，从 Release 下载 `chrome-semantic-shell-shared-<version>.tgz` 和 `chrome-semantic-shell-<version>.tgz`，
+在同一条命令里一起安装：`npm install -g .\chrome-semantic-shell-shared-<version>.tgz .\chrome-semantic-shell-<version>.tgz`。
 
 ### 2. 加载扩展
 
@@ -380,13 +397,13 @@ GitHub Actions 会完成校验和离线回归，打包扩展、Agent Skill、sha
 再通过 [Trusted Publishing](https://docs.npmjs.com/trusted-publishers/)（GitHub OIDC，不存 token，自动附带 provenance）
 依次发布 `chrome-semantic-shell-shared` 与 `chrome-semantic-shell` 到 npm。npm 上已存在的版本会跳过。
 
-维护者一次性配置 npm：
+维护者发布清单：
 
-1. 注册 npmjs.com 账号并开启两步验证。
-2. 首个版本手动发布（Trusted Publisher 只能添加到已存在的包）：`npm login`、`pnpm build`，按[从源码构建](#从源码构建)打包两个 tgz，
-   先 `npm publish <shared tgz> --access public`，再 `npm publish <cli tgz> --access public`。
-3. 在 npmjs.com 两个包的 **Settings → Trusted publishing** 中选择 GitHub Actions，填写
-   `sunfase-io` / `chrome-semantic-shell` / `build-release.yml`。
+1. 同时修改 `app/native-server/package.json` 与 `packages/shared/package.json` 的 `version`，tag 必须等于 `v<version>`。
+2. 两个 npm 包都要信任 `sunfase-io` / `chrome-semantic-shell` / `build-release.yml`
+   （npmjs.com → 包 → **Settings → Trusted publishing**），否则 npm 发布步骤会失败。
+3. 若 npm 把版本放进 staged publishing，需在 npmjs.com 的 **Staged Packages** 中用两步验证批准，批准前无法安装。
+4. 工作流结束后用 `npm view chrome-semantic-shell version` 和 Release 附件确认结果。
 
 ## 安全边界
 

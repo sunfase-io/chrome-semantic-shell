@@ -1,5 +1,9 @@
 # Chrome Semantic Shell
 
+[![npm](https://img.shields.io/npm/v/chrome-semantic-shell)](https://www.npmjs.com/package/chrome-semantic-shell)
+[![release](https://img.shields.io/github/v/release/sunfase-io/chrome-semantic-shell)](https://github.com/sunfase-io/chrome-semantic-shell/releases/latest)
+[![license](https://img.shields.io/github/license/sunfase-io/chrome-semantic-shell)](LICENSE)
+
 English | [简体中文](README_zh.md)
 
 Chrome Semantic Shell is a local, CLI-first browser automation runtime for an existing Chrome
@@ -56,12 +60,20 @@ optional.
 
 ### 1. Install the CLI
 
+The CLI is published on npm as [`chrome-semantic-shell`](https://www.npmjs.com/package/chrome-semantic-shell)
+(its runtime dependency `chrome-semantic-shell-shared` is installed automatically):
+
 ```powershell
 npm install -g chrome-semantic-shell
+chrome-shell --version
 ```
 
 This installs two commands: `chrome-shell` (runs DSL programs) and `chrome-shell-bridge` (registration and
 diagnostics). npm runs a postinstall step that registers the Native Messaging host for the current user.
+Use the same major version for the CLI and the extension.
+
+In mainland China, the npmmirror registry is usually faster (new versions sync within minutes):
+`npm install -g chrome-semantic-shell --registry=https://registry.npmmirror.com`.
 
 pnpm 10 may block global lifecycle scripts, so register explicitly:
 
@@ -71,6 +83,10 @@ chrome-shell-bridge register
 ```
 
 Running `chrome-shell-bridge register` again is always safe; use it whenever you are unsure.
+
+Without access to the npm registry, download `chrome-semantic-shell-shared-<version>.tgz` and
+`chrome-semantic-shell-<version>.tgz` from the release and install both files in one command:
+`npm install -g .\chrome-semantic-shell-shared-<version>.tgz .\chrome-semantic-shell-<version>.tgz`.
 
 ### 2. Load the extension
 
@@ -388,14 +404,15 @@ and Native CLI, creates a GitHub Release, and publishes `chrome-semantic-shell-s
 to npm through [Trusted Publishing](https://docs.npmjs.com/trusted-publishers/) (GitHub OIDC, no stored token,
 automatic provenance). Versions already on npm are skipped.
 
-One-time npm setup for maintainers:
+Release checklist for maintainers:
 
-1. Create an npmjs.com account and enable two-factor authentication.
-2. Publish the first version manually, because a trusted publisher can only be added to an existing package:
-   `npm login`, `pnpm build`, pack both packages as in [Build from source](#build-from-source), then
-   `npm publish <shared tgz> --access public` followed by `npm publish <cli tgz> --access public`.
-3. For each package on npmjs.com, open **Settings → Trusted publishing**, choose GitHub Actions, and enter
-   `sunfase-io` / `chrome-semantic-shell` / `build-release.yml`.
+1. Bump `version` in `app/native-server/package.json` and `packages/shared/package.json` together; the tag
+   must equal `v<version>`.
+2. Both npm packages trust `sunfase-io` / `chrome-semantic-shell` / `build-release.yml`
+   (npmjs.com → package → **Settings → Trusted publishing**). Without that trust the npm step fails.
+3. If npm puts a version into staged publishing, approve it with 2FA under **Staged Packages** on npmjs.com;
+   it is not installable until approved.
+4. Check `npm view chrome-semantic-shell version` and the release assets after the workflow finishes.
 
 ## Security model
 
