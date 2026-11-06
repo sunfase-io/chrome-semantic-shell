@@ -89,6 +89,18 @@ if (window.__FILL_HELPER_INITIALIZED__) {
         };
       }
 
+      const ariaRole = element.getAttribute('role');
+      if (element.tagName !== 'INPUT' && ['checkbox', 'switch', 'radio'].includes(ariaRole)) {
+        const desired = ariaRole === 'radio' ? true : parseCheckedValue(value);
+        if (typeof desired !== 'boolean') return { error: CHECKED_VALUE_ERROR, elementInfo };
+        return await setToggle(
+          element,
+          desired,
+          () => element.getAttribute('aria-checked') === 'true',
+          elementInfo,
+        );
+      }
+
       // Check if element is an input, textarea, or select
       const validTags = ['INPUT', 'TEXTAREA', 'SELECT'];
       // Keep a permissive list to allow type-specific branches below to handle behavior
@@ -174,54 +186,14 @@ if (window.__FILL_HELPER_INITIALIZED__) {
       element.focus();
 
       // Type-specific handling for tricky inputs first
-      if (element.tagName === 'INPUT' && element.type === 'checkbox') {
-        // Accept boolean or string-like boolean
-        let checkedVal;
-        if (typeof value === 'boolean') {
-          checkedVal = value;
-        } else if (typeof value === 'string') {
-          const v = value.trim().toLowerCase();
-          if (['true', '1', 'yes', 'on'].includes(v)) checkedVal = true;
-          else if (['false', '0', 'no', 'off'].includes(v)) checkedVal = false;
-        }
-        if (typeof checkedVal !== 'boolean') {
-          return {
-            error:
-              'Checkbox requires a boolean (true/false) or a boolean-like string ("true"/"false"/"on"/"off").',
-            elementInfo,
-          };
-        }
-        const previous = element.checked;
-        element.checked = checkedVal;
-        element.focus();
-        element.dispatchEvent(new Event('input', { bubbles: true }));
-        element.dispatchEvent(new Event('change', { bubbles: true }));
-        element.blur();
-        return {
-          success: true,
-          message: `Checkbox set to ${element.checked}`,
-          elementInfo: { ...elementInfo, checked: element.checked, previousChecked: previous },
-        };
-      }
-
-      if (element.tagName === 'INPUT' && element.type === 'radio') {
-        // For radios, the selector/ref should target the specific input to select
-        const previous = element.checked;
-        element.checked = true;
-        element.focus();
-        element.dispatchEvent(new Event('input', { bubbles: true }));
-        element.dispatchEvent(new Event('change', { bubbles: true }));
-        element.blur();
-        return {
-          success: true,
-          message: 'Radio selected',
-          elementInfo: {
-            ...elementInfo,
-            checked: element.checked,
-            previousChecked: previous,
-            name: element.name || null,
-          },
-        };
+      if (
+        element.tagName === 'INPUT' &&
+        (element.type === 'checkbox' || element.type === 'radio')
+      ) {
+        // For radios, the selector/ref targets the specific option to select.
+        const desired = element.type === 'radio' ? true : parseCheckedValue(value);
+        if (typeof desired !== 'boolean') return { error: CHECKED_VALUE_ERROR, elementInfo };
+        return await setToggle(element, desired, () => element.checked, elementInfo);
       }
 
       if (element.tagName === 'INPUT' && element.type === 'range') {
@@ -308,6 +280,44 @@ if (window.__FILL_HELPER_INITIALIZED__) {
         error: `Error filling element: ${error.message}`,
       };
     }
+  }
+
+  const CHECKED_VALUE_ERROR =
+    'Checkbox requires a boolean (true/false) or a boolean-like string ("true"/"false"/"on"/"off").';
+
+  function parseCheckedValue(value) {
+    if (typeof value === 'boolean') return value;
+    if (typeof value !== 'string') return undefined;
+    const v = value.trim().toLowerCase();
+    if (['true', '1', 'yes', 'on'].includes(v)) return true;
+    if (['false', '0', 'no', 'off'].includes(v)) return false;
+    return undefined;
+  }
+
+  /**
+   * Toggle through the element's own activation (a real click event) so that framework
+   * state (React value tracking, Vue v-model, aria widgets) follows. Writing `.checked`
+   * only changes the DOM and a controlled component restores it on the next render.
+   */
+  async function setToggle(element, desired, read, elementInfo) {
+    const previous = read();
+    if (previous !== desired) element.click();
+    for (let waited = 0; read() !== desired && waited < 500; waited += 50) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    const checked = read();
+    if (checked !== desired) {
+      return {
+        error: `Toggle stayed ${checked} after clicking; the page rejected the change to ${desired}`,
+        elementInfo: { ...elementInfo, checked, previousChecked: previous },
+      };
+    }
+    return {
+      success: true,
+      message:
+        previous === desired ? `Already ${desired ? 'checked' : 'unchecked'}` : `Set to ${checked}`,
+      elementInfo: { ...elementInfo, checked, previousChecked: previous },
+    };
   }
 
   /**
