@@ -23,6 +23,8 @@ class WindowTool extends BaseBrowserToolExecutor {
 
         return {
           windowId: window.id || 0,
+          focused: window.focused,
+          state: window.state,
           tabs: tabs,
         };
       });

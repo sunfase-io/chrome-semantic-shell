@@ -18,11 +18,12 @@
         "inspect dialog",
         "inspect text",
         "inspect full",
-        "query"
+        "query",
+        "inspect since"
       ],
       "evidence": "本地历史会话复盘（会话记录不公开）",
       "offline": "app/chrome-extension/tests/semantic-shell/semantic-state-core.test.ts",
-      "live": ["perception", "row-scope"]
+      "live": ["perception", "row-scope", "inspect-since"]
     },
     {
       "id": "refs",
@@ -86,11 +87,13 @@
         "wait network",
         "watch",
         "diff",
-        "timeout"
+        "timeout",
+        "wait idle",
+        "wait gone"
       ],
       "evidence": "本地历史会话复盘（会话记录不公开）",
       "offline": "app/chrome-extension/tests/semantic-shell/semantic-state-version.test.ts",
-      "live": ["async-wait", "invalid-selector", "network", "watch-diff"]
+      "live": ["async-wait", "invalid-selector", "network", "watch-diff", "wait-idle-gone"]
     },
     {
       "id": "assert",
@@ -209,11 +212,12 @@
         "VARS",
         "frame",
         "truncation-warning",
-        "fallback-engines"
+        "fallback-engines",
+        "last-expression-return"
       ],
       "evidence": "本地历史会话复盘（会话记录不公开）",
       "offline": "app/chrome-extension/tests/semantic-shell/javascript-forms.test.ts",
-      "live": ["js-expression", "js-quoted-equals", "js-vars"]
+      "live": ["js-expression", "js-quoted-equals", "js-vars", "js-last-expression"]
     },
     {
       "id": "dsl-validation",
@@ -267,6 +271,32 @@
       "evidence": "本地历史会话复盘（会话记录不公开）",
       "offline": "app/chrome-extension/tests/semantic-shell/semantic-shell-tool.test.ts",
       "live": ["wait-url", "navigate-error", "tool-timeout"]
+    },
+    {
+      "id": "components-2026-11",
+      "features": [
+        "fixed-column-rows",
+        "styled-checkbox-label",
+        "dropdown-menuitem",
+        "fading-dialog",
+        "reused-message-box",
+        "searchable-remote-select",
+        "select-candidates-from-list",
+        "css-hidden-diagnosis",
+        "ref-relocation",
+        "ref-frame-owner"
+      ],
+      "evidence": "本地历史会话复盘（会话记录不公开）；Element UI 2.13.2 真实页面对照",
+      "offline": "app/chrome-extension/tests/semantic-shell/semantic-state-core.test.ts",
+      "live": [
+        "element-fixed-row",
+        "element-message-box",
+        "element-select",
+        "element-select-miss",
+        "css-hidden-miss",
+        "ref-after-rerender",
+        "ref-other-frame"
+      ]
     }
   ]
 }

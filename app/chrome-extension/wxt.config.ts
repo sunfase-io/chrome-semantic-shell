@@ -29,6 +29,7 @@ export default defineConfig({
       'webRequest',
       'webNavigation',
       'debugger',
+      'idle',
       'offscreen',
       'userScripts',
     ],
@@ -45,7 +46,9 @@ export default defineConfig({
       }) as any,
     ],
     build: {
-      target: 'es2015',
+      // Page functions are serialized with Function#toString: async/await and object spread must stay
+      // native, since down-levelled code calls bundle helpers that do not exist in the page.
+      target: 'es2022',
       emptyOutDir: true,
       modulePreload: false,
       sourcemap: env.mode !== 'production',

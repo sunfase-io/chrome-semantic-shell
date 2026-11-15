@@ -13,6 +13,25 @@ const DEBUGGER_PROTOCOL_VERSION = '1.3';
 export class CDPSessionManager {
   private sessions = new Map<number, TabSessionState>();
   private transitions = new Map<number, Promise<void>>();
+  private listening = false;
+  private detachListeners = new Set<(tabId: number, reason: string) => void>();
+
+  /** Closing the tab, opening DevTools on it or cancelling Chrome's debugging bar detaches without us. */
+  private listen(): void {
+    if (this.listening) return;
+    this.listening = true;
+    chrome.debugger.onDetach.addListener((source, reason) => {
+      if (source.tabId === undefined) return;
+      this.sessions.delete(source.tabId);
+      for (const listener of this.detachListeners) listener(source.tabId, reason);
+    });
+  }
+
+  /** Called after Chrome ended a session on its own and this manager forgot it. */
+  onDetached(listener: (tabId: number, reason: string) => void): void {
+    this.listen();
+    this.detachListeners.add(listener);
+  }
 
   private async transition<T>(tabId: number, operation: () => Promise<T>): Promise<T> {
     const previous = this.transitions.get(tabId) || Promise.resolve();
@@ -36,6 +55,7 @@ export class CDPSessionManager {
   }
 
   private async attachUnlocked(tabId: number, owner: OwnerTag): Promise<void> {
+    this.listen();
     const state = this.getState(tabId);
     if (state && state.attachedByUs) {
       state.refCount += 1;

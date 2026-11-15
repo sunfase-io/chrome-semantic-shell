@@ -52,7 +52,7 @@ Chrome Semantic Shell 的做法是：一个装在你 Chrome 里的扩展 + 一�
 
 - 用的是你日常的 Chrome 配置：登录态、Cookie、已装扩展、客户端证书、公司 SSO 都在。
 - **不需要**用 `--remote-debugging-port` 重启 Chrome，**不需要**另建 profile，也不需要每次连接都点授权。
-- 可以操作后台标签页（`--tab <id>`），不打断你在前台的工作；截图也能截后台标签页。
+- 不霸占浏览器：除了显式的 `tab switch`，任何命令都不会切换标签或把窗口拉到前台。后台标签、最小化的窗口、被编辑器挡住的 Chrome，在 Agent 操作期间都按前台标签的方式渲染，截图也一样。
 
 ### 2. 一次调用干完一整段活
 
@@ -69,13 +69,14 @@ Chrome Semantic Shell 的做法是：一个装在你 Chrome 里的扩展 + 一�
 ### 4. 准：找不准就报错，绝不瞎猜
 
 - 匹配到多个元素时直接失败并列出候选，而不是默默点第一个。
-- 页面刷新后旧的元素引用（ref）失效会被识别出来，不会点到错的东西。
-- `select` 会真正打开下拉组件、等真实选项出现再点击，Element UI、Ant Design 这类组件下拉也能选对。
+- 元素被重新渲染后，旧引用（ref）只在能唯一找回同角色、同名称的元素时才继续，并给出提示；找不回就报错，不会点到错的东西。
+- `select` 会真正打开下拉组件、等真实选项出现再点击；可搜索、远程搜索的下拉会先输入再选，Element UI、Ant Design 这类组件下拉也能选对。
 - `scope=pipe` 把查找限定在某一行或某个弹窗里，例如“订单 ORDER-001 那一行的‘查看’按钮”。
 
 ### 5. 懂前端框架
 
-语义层同时读取原生 HTML/ARIA 和 Vue 2、Vue 3、React 组件信息，并识别 Element UI / Ant / Fusion 等组件库的弹窗；
+语义层同时读取原生 HTML/ARIA 和 Vue 2、Vue 3、React 组件信息，并识别 Element UI / Ant / Fusion 等组件库的弹窗、
+固定列表格（每行只出现一次，行里的勾选框和操作按钮都归到这一行）、隐藏了原生 input 的勾选框和下拉菜单项；
 iframe 里的元素也会合并进来，操作时自动进入对应 frame。
 
 ### 6. 失败就是失败
@@ -252,7 +253,7 @@ chrome-shell 'query role=row query="ORDER-001" | query role=button name="查看"
 **4. 打开临时页面取数据，结束后自动关闭**
 
 ```powershell
-chrome-shell 'tab new https://example.com active=false; defer { tab close }; extract css="h1" ; inspect text'
+chrome-shell 'tab new https://example.com; defer { tab close }; extract css="h1" ; inspect text'
 ```
 
 **5. 用页面的登录态直接调接口**
@@ -301,17 +302,17 @@ chrome-shell 'storage get session key=accessToken as=$token && http POST /api/fl
 
 ### 导航、标签页、等待与断言
 
-| 命令       | 作用                                           | 示例                                       |
-| ---------- | ---------------------------------------------- | ------------------------------------------ |
-| `navigate` | 打开网址，遇到网络错误页会失败                 | `navigate https://example.com`             |
-| `back`     | 后退                                           | `back`                                     |
-| `forward`  | 前进                                           | `forward`                                  |
-| `reload`   | 刷新                                           | `reload`                                   |
-| `tab`      | 列出 / 新建 / 切换 / 关闭标签页                | `tab new https://example.com active=false` |
-| `window`   | 列出窗口及其标签页                             | `window`                                   |
-| `wait`     | 等待文字、元素、网址变化、导航或网络空闲       | `wait text="完成" timeout=10000`           |
-| `assert`   | 断言文字存在 / 元素存在 / 元素可见             | `assert text="保存成功"`                   |
-| `dialog`   | 处理浏览器原生弹窗（alert / confirm / prompt） | `dialog accept`                            |
+| 命令       | 作用                                           | 示例                             |
+| ---------- | ---------------------------------------------- | -------------------------------- |
+| `navigate` | 打开网址，遇到网络错误页会失败                 | `navigate https://example.com`   |
+| `back`     | 后退                                           | `back`                           |
+| `forward`  | 前进                                           | `forward`                        |
+| `reload`   | 刷新                                           | `reload`                         |
+| `tab`      | 列出 / 新建 / 切换 / 关闭标签页                | `tab new https://example.com`    |
+| `window`   | 列出窗口及其标签页                             | `window`                         |
+| `wait`     | 等待文字、元素、网址变化、导航或网络空闲       | `wait text="完成" timeout=10000` |
+| `assert`   | 断言文字存在 / 元素存在 / 元素可见             | `assert text="保存成功"`         |
+| `dialog`   | 处理浏览器原生弹窗（alert / confirm / prompt） | `dialog accept`                  |
 
 ### 数据与接口
 

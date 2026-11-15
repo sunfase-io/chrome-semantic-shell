@@ -309,7 +309,7 @@ const ANY_OPTION = '*';
 
 /** Options each command reads. Unknown options fail before any page effect instead of being ignored. */
 export const SHELL_COMMAND_OPTIONS: Readonly<Record<string, readonly string[]>> = {
-  inspect: ['mode', 'query', 'limit', 'scope', 'role', 'name', 'name~', 'text', 'frame'],
+  inspect: ['mode', 'query', 'limit', 'scope', 'role', 'name', 'name~', 'text', 'frame', 'since'],
   query: ['mode', 'query', 'limit', 'scope', 'role', 'name', 'name~', 'text', 'frame', 'css', 'nth'],
   diff: [],
   watch: ['timeout'],
@@ -331,9 +331,9 @@ export const SHELL_COMMAND_OPTIONS: Readonly<Record<string, readonly string[]>> 
   back: [],
   forward: [],
   reload: [],
-  tab: ['url', 'id', 'active', 'timeout', 'match'],
+  tab: ['url', 'id', 'active', 'focus', 'timeout', 'match'],
   window: [],
-  wait: ['text', 'selector', 'url', 'url~', 'timeout', 'frame', 'state'],
+  wait: ['text', 'gone', 'selector', 'url', 'url~', 'timeout', 'frame', 'state'],
   assert: ['text', 'visible', 'exists'],
   scroll: [...TARGET_OPTIONS, 'amount'],
   hover: [...TARGET_OPTIONS],
@@ -355,19 +355,63 @@ export const SHELL_COMMAND_OPTIONS: Readonly<Record<string, readonly string[]>> 
 /** Block arguments of control-flow commands, validated recursively. */
 const BLOCK_ARG = /^\{[\s\S]*\}$/;
 
+const TAB_ACTIONS = ['list', 'new', 'switch', 'close'];
+
+/** Names agents reach for that mean something else here. */
+const COMMAND_HINTS: Readonly<Record<string, string>> = {
+  open: 'tab new URL, or navigate URL in the current tab',
+  goto: 'navigate URL',
+  tabs: 'tab list',
+  sleep: 'wait idle, wait text=..., or wait gone=...',
+  dispatch: 'click, or js to dispatch a custom event',
+  evaluate: 'js',
+  eval: 'js',
+  help: 'help is a CLI command: chrome-shell help [command]',
+};
+const TAB_HINTS: Readonly<Record<string, string>> = {
+  open: 'new', create: 'new', activate: 'switch', focus: 'switch', select: 'switch', ls: 'list', remove: 'close',
+};
+const OPTION_HINTS: Readonly<Record<string, string>> = { ms: 'wait N', in: 'scope=', label: 'name=' };
+
+function editDistance(a: string, b: string): number {
+  let row = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    const next = [i];
+    for (let j = 1; j <= b.length; j++) {
+      next[j] = Math.min(row[j] + 1, next[j - 1] + 1, row[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    }
+    row = next;
+  }
+  return row[b.length];
+}
+
+/** A " (did you mean …?)" suffix: a known confusion, else the one close spelling. */
+function didYouMean(word: string, hints: Readonly<Record<string, string>>, candidates: readonly string[]): string {
+  const hint = hints[word] ?? candidates.find((candidate) => editDistance(word, candidate) <= Math.min(2, candidate.length - 1));
+  return hint ? ` (did you mean ${hint}?)` : '';
+}
+
 export function validateShellProgram(program: ShellProgram): void {
   for (const statement of program.statements) {
     for (const command of statement.pipeline) {
       const allowed = SHELL_COMMAND_OPTIONS[command.name];
       const where = `at ${statement.line}: ${command.raw.slice(0, 60)}`;
-      if (!allowed) throw new ShellSyntaxError(`unsupported command "${command.name}"`, statement.line, 1);
+      if (!allowed) {
+        const hint = didYouMean(command.name, COMMAND_HINTS, Object.keys(SHELL_COMMAND_OPTIONS));
+        throw new ShellSyntaxError(`unsupported command "${command.name}"${hint}`, statement.line, 1);
+      }
       if (!allowed.includes(ANY_OPTION)) {
         const unknown = Object.keys(command.options).filter((key) => !allowed.includes(key));
         if (unknown.length) {
+          const named = unknown.map((key) => `"${key}"${didYouMean(key, OPTION_HINTS, allowed)}`).join(', ');
           throw new Error(
-            `${command.name}: unknown option${unknown.length > 1 ? 's' : ''} ${unknown.map((key) => `"${key}"`).join(', ')} (${where}); allowed: ${allowed.join(', ') || 'none'}`,
+            `${command.name}: unknown option${unknown.length > 1 ? 's' : ''} ${named} (${where}); allowed: ${allowed.join(', ') || 'none'}`,
           );
         }
+      }
+      const action = command.args[0];
+      if (command.name === 'tab' && action !== undefined && !TAB_ACTIONS.includes(action)) {
+        throw new Error(`tab: unsupported action "${action}"${didYouMean(action, TAB_HINTS, TAB_ACTIONS)} (${where}); actions: ${TAB_ACTIONS.join(', ')}`);
       }
       if (['defer', 'if', 'for'].includes(command.name)) {
         for (const arg of command.args) {

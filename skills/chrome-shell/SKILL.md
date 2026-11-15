@@ -18,7 +18,7 @@ chrome-shell 'fillform 邮箱=$email && query role=button name="登录" | click 
 Register cleanup immediately after allocating temporary browser state:
 
 ```powershell
-chrome-shell 'tab new https://example.com active=false; defer { tab close }; inspect interactive limit=30'
+chrome-shell 'tab new https://example.com; defer { tab close }; inspect interactive limit=30'
 ```
 
 Deferred blocks run in LIFO order after success, failure, or a command deadline. They guarantee cleanup but do not hide the original failure; the process still exits nonzero.
@@ -53,7 +53,7 @@ For **UI acceptance**, exercise the actual UI handlers: an API write or Vue-mode
 
 Batch until the next **unknown observation**, not an arbitrary step count. Stop after opening an unfamiliar dialog or navigating to an unknown page. Parallelize independent reads or separate tabs; keep mutations on one tab serial. After a write times out, read its actual status before any retry.
 
-Use `wait text=...`, `wait selector=...` (`state=attached` for inputs hidden by rich editors) or `wait url~=...` for the expected condition — never a fixed `wait N` or `Start-Sleep`; `wait text` only proves something if that text was not already on the page. Use `watch` for an external change. `wait network` is only useful when network quiescence is the actual condition.
+Use `wait text=...`, `wait gone=...` (a spinner or "加载中" disappears), `wait selector=...` (`state=attached` for inputs hidden by rich editors) or `wait url~=...` for the expected condition; when there is no specific sign, `wait idle` returns once the DOM and fetch/XHR traffic stay quiet for 500 ms. Never use a fixed `wait N` or `Start-Sleep`; `wait text` only proves something if that text was not already on the page. Use `watch` for an external change.
 
 ### Optional Jev fast loop
 
@@ -82,11 +82,13 @@ chrome-shell 'query role=button name="保存"'
 chrome-shell 'query role=link name~="下载" nth=0'
 ```
 
-Views are `interactive`, `forms`, `tables`, `dialog`, `text`, and `full`. Default to a scoped view; `full` is an explicit content-heavy escalation, `text` returns readable text blocks once each.
+Views are `interactive`, `forms`, `tables`, `dialog`, `text`, and `full`. Default to a scoped view; `full` is an explicit content-heavy escalation, `text` returns readable text blocks once each. Listings omit default states (`disabled`, `required`, `invalid`, `selected` appear only when true). To look at the same view again in a later call, `inspect forms since=v12` prints only what changed since the inspect that reported `state=v12`.
 
-`role=`, `name=` (exact), `name~=` (substring) and `css=` filter in the page before `limit`, so a crowded page cannot hide the target; a role filter also selects non-interactive roles such as `dialog`, `row` or `heading`. `query` fails when nothing matches. `inspect dialog` picks the dialog named by `query=`, else the one on top.
+`role=`, `name=` (exact), `name~=` (substring) and `css=` filter in the page before `limit`, so a crowded page cannot hide the target; a role filter also selects non-interactive roles such as `dialog`, `row` or `heading`. `query` fails when nothing matches; a `css=` miss says whether the selector matched only hidden elements. `inspect dialog` picks the dialog named by `query=`, else the one on top; a dialog or list still fading in counts as open.
 
-Semantic inspection merges the top document and all accessible frames; framed nodes include `frame=<id>`, and actions consume that frame identity. Refs remain stable while the same DOM node lives, also across invocations. Even an identical-looking node replacement invalidates the old ref. `STALE_REF` or multiple matches require another scoped query; use `nth=` only when the list order itself is the meaning.
+A control in a table row carries `in="row:<cells>"`, so `inspect interactive role=button query="HDFK001"` lists that row's buttons. Fixed columns (Element UI, vxe-table) belong to their row: `query role=row query="HDFK001" | query role=checkbox scope=pipe` finds the selection box and the right-fixed buttons. A styled checkbox or radio (hidden native input) is listed as `checkbox`/`radio` by its label, dropdown menu entries as `menuitem`.
+
+Semantic inspection merges the top document and all accessible frames; framed nodes include `frame=<id>`, and actions consume that frame identity. Refs remain stable while the same DOM node lives, also across invocations. When a re-render replaced the node, an action finds the only node with the same role and name in the same container and says so (`warning click: ref_18 was re-rendered; used ref_85`); otherwise it fails with `STALE_REF` and needs another scoped query. Use `nth=` only when the list order itself is the meaning.
 
 ## Compose and Batch
 
@@ -96,7 +98,7 @@ chrome-shell 'inspect dialog query="创建网站" && fillform 域名=$domain && 
 
 - `;` or newline: always continue (`--fail-fast` stops instead). `&&` / `||`: branch on the prior command result. `|`: pass semantic nodes.
 - `scope=pipe`: require one piped container and query only inside it and its frame (`scope` accepts only `pipe` or a ref).
-- `fillform`: fill ordinary fields in one action batch. `select`: open a component combobox, wait for the real option, click it. Never write its proxy input.
+- `fillform`: fill ordinary fields in one action batch. `select`: open a component combobox, wait for the real option, click it; a searchable or remote select (Element UI `filterable`/`remote`) gets the value typed first. A miss lists the options the open list shows. Never write its proxy input.
 
 Use `&&` for dependent writes. Use `defer` for cleanup; a failed batch is not rolled back.
 
@@ -153,7 +155,7 @@ extract css=".post" fields={"title":"h2","href":"a@href","floor":".no"} as=$post
 
 - `http` runs in the page: same origin, cookies, certificates and CORS as the page; relative URLs resolve against it; non-2xx fails with the response snippet. `pick=` reduces the JSON in the page. `context=extension` sends from the extension instead.
 - `storage get` stores a value without printing it; reference it in `headers=` as `"$token"`. Never echo credentials into the transcript.
-- `js` is the narrow escape hatch: a single expression returns its value (`js "location.href"`); statements need `return` (`js code="const a=1; return a"`); `VARS` holds program variables; the value prints as `js: <value>`. Results above 50 KB are cut with a warning (`max=` raises it). Give `frame=<id>` to run in an iframe. Do not generate DOM-survey JavaScript when `inspect`/`query`/`extract` can answer.
+- `js` is the narrow escape hatch: like the console, it returns the value of a single expression (`js "location.href"`) or of the last expression statement (`js code="const links = [...document.links]; links.length"`); `return` works too; `VARS` holds program variables; the value prints as `js: <value>`. Results above 50 KB are cut with a warning (`max=` raises it). Give `frame=<id>` to run in an iframe. Do not generate DOM-survey JavaScript when `inspect`/`query`/`extract` can answer.
 
 WebMCP uses `document.modelContext`; `navigator.modelContext` is deprecated. `-C <workspace>` selects the `.webmcp` workspace; `tool ls` also lists files that failed to load and why. Mark read-only snippets `// readonly: true` (manifests: `"readOnly": true`); read-only-only programs skip change observation.
 
@@ -187,7 +189,7 @@ Escalation order:
 5. Narrow explicit JS/framework operation.
 6. Human selection after roughly three deterministic failures.
 
-`screenshot` captures the target tab through CDP, also in the background (a tab that renders nothing is activated briefly and the previous tab restored); `screenshot @ref` captures one element, `screenshot full=true` the whole page. Images never go through Chrome downloads, so no download prompt can block them; the CLI prints `artifact: <absolute-path>` — open it with the host's image viewer. A locked screen or minimized window is reported as such.
+`screenshot` captures the target tab through CDP without activating it, also from a background tab, a minimized window or a locked screen; `screenshot @ref` captures one element, `screenshot full=true` the whole page. Images never go through Chrome downloads, so no download prompt can block them; the CLI prints `artifact: <absolute-path>` — open it with the host's image viewer.
 
 ## Tabs and Long Programs
 
@@ -198,9 +200,9 @@ chrome-shell --file .webmcp/jobs/create-order.chrome --fail-fast
 Get-Content -Raw .webmcp/jobs/create-order.chrome | chrome-shell --stdin
 ```
 
-- Pass `--tab` for background work. Research and probing open their own tab (`tab new URL active=false; defer { tab close }`) instead of navigating a tab the user is working in. A closed tab id is gone: run `tab list` again rather than reusing it.
-- `tab new` returns its tab id even when the page keeps loading (with a warning); wait for a page condition before acting.
-- Single-page apps in a hidden background tab may not render (canvas designers, virtual lists); `tab switch <id>` first when the page stays empty.
+- Work in the background; the user keeps using the computer or locks it. No command activates a tab or raises a window except `tab switch`, so never use it to make a page work: a background tab, a minimized window, a Chrome window behind another application and every tab of a locked screen are kept rendering like a foreground tab for the program. Use `tab switch <id> focus=true` only to show the user something they must act on, such as a CAPTCHA.
+- Pass `--tab` for background work. Research and probing open their own tab (`tab new URL; defer { tab close }`; it opens behind the user's tab) instead of navigating a tab the user is working in. A closed tab id is gone: run `tab list` again rather than reusing it.
+- `tab new` and `navigate` return once the document is parsed, with a warning when it is still loading; wait for the content you need before acting.
 - Navigation invalidates the prior semantic version; consume its delta before the next action. `navigate` fails on network error pages.
 - `--timeout` bounds the whole program (max 280000 ms); `tool call ... timeout=` and `download timeout=` must fit inside it. `--dry-run` checks grammar and options only.
 

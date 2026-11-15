@@ -53,8 +53,31 @@ export function inspectSemanticSignal(): SemanticPageSignal {
  * Page-side semantic extractor. The body is serialized with Function#toString,
  * so it deliberately contains all helpers and uses no outer runtime values.
  */
-export function inspectSemanticPage(opts: SemanticInspectOptions = {}): SemanticPageState {
+export async function inspectSemanticPage(opts: SemanticInspectOptions = {}): Promise<SemanticPageState> {
   const w = window as any;
+  // A snapshot taken mid-fade reports what the page settles to: an opening dialog or list counts,
+  // a closing one does not. Transition frameworks add their `-enter` class a frame before the fade starts.
+  // A hidden page advances no animation, and Chrome may delay its timers by up to a minute.
+  if (document.visibilityState === 'visible' && typeof document.getAnimations === 'function') {
+    const timeout = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+    if (document.querySelector('[class*="-enter"],[class*="-appear"]')) {
+      await Promise.race([
+        new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))),
+        timeout(100),
+      ]);
+    }
+    const fading = document.getAnimations().filter((animation) => {
+      const end = Number(animation.effect?.getComputedTiming().endTime);
+      if (animation.playState !== 'running' || !Number.isFinite(end)) return false;
+      const property = (animation as CSSTransition).transitionProperty;
+      return property !== undefined
+        ? property === 'opacity'
+        : ((animation.effect as KeyframeEffect | null)?.getKeyframes() || []).some((frame) => 'opacity' in frame);
+    });
+    if (fading.length) {
+      await Promise.race([Promise.all(fading.map((animation) => animation.finished.catch(() => undefined))), timeout(400)]);
+    }
+  }
   if (!w.__chromeShellSemanticSignal) {
     const signal = { revision: 0 };
     const bump = () => {
@@ -109,7 +132,8 @@ export function inspectSemanticPage(opts: SemanticInspectOptions = {}): Semantic
   const resolveRef = (ref: string): Element | null => {
     const weak = refMap[ref];
     const el = weak && weak.deref ? weak.deref() : null;
-    return el instanceof Element ? el : null;
+    // A replaced element may linger detached until it is collected; it is no longer the page's.
+    return el instanceof Element && el.isConnected ? el : null;
   };
 
   const styles = new Map<Element, CSSStyleDeclaration>();
@@ -141,6 +165,9 @@ export function inspectSemanticPage(opts: SemanticInspectOptions = {}): Semantic
     const explicit = el.getAttribute('role');
     if (explicit) return explicit.split(/\s+/)[0];
     if (el.matches('.el-select-dropdown__item, .el-cascader-node')) return 'option';
+    if (el.matches('.el-dropdown-menu__item, .ant-dropdown-menu-item, .ivu-dropdown-item, .arco-dropdown-option')) {
+      return 'menuitem';
+    }
     const tag = el.tagName.toLowerCase();
     const type = (el.getAttribute('type') || '').toLowerCase();
     if (tag === 'a' && (el.hasAttribute('href') || scriptedClick(el))) return 'link';
@@ -204,7 +231,22 @@ export function inspectSemanticPage(opts: SemanticInspectOptions = {}): Semantic
       .trim();
   };
 
+  const ROW = 'tr,[role="row"]';
+  /** Cells joined by spaces: a row's text without separators runs its columns together. */
+  const rowText = (row: Element): string =>
+    clean(
+      Array.from(row.children, (cell) => textOf(cell))
+        .filter(Boolean)
+        .join(' '),
+    ).slice(0, 120);
+
+  const names = new Map<Element, string>();
   const nameOf = (el: Element): string => {
+    let name = names.get(el);
+    if (name === undefined) names.set(el, (name = computeName(el)));
+    return name;
+  };
+  const computeName = (el: Element): string => {
     const labelled = byIdText(el.getAttribute('aria-labelledby'), el);
     if (labelled) return labelled;
     for (const attr of ['aria-label']) {
@@ -222,7 +264,48 @@ export function inspectSemanticPage(opts: SemanticInspectOptions = {}): Semantic
     }
     // A native select's text is the concatenation of every option; its value is reported separately.
     if (el instanceof HTMLSelectElement) return '';
+    if (el.matches(ROW)) return rowText(el);
+    if (el.matches(TABLE)) return tableHeaders(el) || textOf(el);
     return textOf(el);
+  };
+
+  // Fixed columns (Element UI 2, vxe-table, Ant Design 3) are separate tables laid over the main one,
+  // repeating every row; the main table keeps hidden copies of their cells. A control in an overlay
+  // belongs to the main row at the same height.
+  const FIXED_OVERLAY =
+    '.el-table__fixed,.el-table__fixed-right,.vxe-table--fixed-left-wrapper,.vxe-table--fixed-right-wrapper,.ant-table-fixed-left,.ant-table-fixed-right';
+  const TABLE_WIDGET = '.el-table,.vxe-table,.ant-table';
+  const TABLE = 'table,[role="table"],[role="grid"],[role="treegrid"]';
+  const hasOverlays = !!document.querySelector(FIXED_OVERLAY);
+  const inOverlay = (el: Element): boolean => hasOverlays && !!el.closest(FIXED_OVERLAY);
+  const mainRowsByTop = new Map<Element, Map<number, Element>>();
+  const mainRowOf = (row: Element): Element => {
+    if (!inOverlay(row)) return row;
+    const widget = row.closest(TABLE_WIDGET);
+    if (!widget) return row;
+    let byTop = mainRowsByTop.get(widget);
+    if (!byTop) {
+      byTop = new Map();
+      for (const main of Array.from(widget.querySelectorAll('tr'))) {
+        if (!inOverlay(main)) byTop.set(Math.round(main.getBoundingClientRect().top), main);
+      }
+      mainRowsByTop.set(widget, byTop);
+    }
+    const top = Math.round(row.getBoundingClientRect().top);
+    return byTop.get(top) || byTop.get(top - 1) || byTop.get(top + 1) || row;
+  };
+  /** Column headers name a table better than its first rows; an Element UI body table has its header apart. */
+  const tableHeaders = (table: Element): string => {
+    const own = (table as HTMLTableElement).caption?.textContent?.trim();
+    if (own) return clean(own).slice(0, 120);
+    const scope = (table as HTMLTableElement).tHead || table.closest(TABLE_WIDGET) || table;
+    return clean(
+      Array.from(scope.querySelectorAll('th,[role="columnheader"]'))
+        .filter((header) => !inOverlay(header))
+        .map((header) => textOf(header))
+        .filter(Boolean)
+        .join(' '),
+    ).slice(0, 120);
   };
 
   const visible = (el: Element): boolean => {
@@ -265,12 +348,28 @@ export function inspectSemanticPage(opts: SemanticInspectOptions = {}): Semantic
     return `body > ${parts.join(' > ')}`;
   };
 
+  /** The innermost container; a control in a table belongs to its row, which tells rows apart. */
   const contextOf = (el: Element): string | undefined => {
-    const parent = el.closest('[role="dialog"],dialog,form,[role="form"],table,[role="region"]');
-    if (!parent || parent === el) return undefined;
+    let parent = el.parentElement?.closest(
+      `[role="dialog"],[role="alertdialog"],dialog,form,[role="form"],${ROW},${TABLE},[role="region"]`,
+    );
+    if (!parent) return undefined;
+    if (parent.matches(ROW)) parent = mainRowOf(parent);
     const role = roleOf(parent);
     const name = nameOf(parent);
     return name ? `${role}:${name.slice(0, 60)}` : role;
+  };
+
+  /** A styled checkbox or radio hides its native input and shows its label; the label stands in for it. */
+  const proxiedControl = (el: Element): HTMLInputElement | undefined => {
+    if (!(el instanceof HTMLLabelElement)) return undefined;
+    const control = el.control;
+    return control instanceof HTMLInputElement &&
+      (control.type === 'checkbox' || control.type === 'radio') &&
+      !visible(control) &&
+      !el.querySelector('[role="checkbox"],[role="radio"],[role="switch"]')
+      ? control
+      : undefined;
   };
 
   const interactiveRoles = new Set([
@@ -350,9 +449,15 @@ export function inspectSemanticPage(opts: SemanticInspectOptions = {}): Semantic
     'status',
   ]);
   const candidates = [document.body, ...Array.from(document.body.querySelectorAll('*'))];
+  const controls = new Map<Element, HTMLInputElement>();
   for (const el of candidates) {
     if (!visible(el)) continue;
-    const role = roleOf(el);
+    const control = proxiedControl(el);
+    if (control) controls.set(el, control);
+    const source: Element = control || el;
+    const role = roleOf(source);
+    // The overlay's own rows and cells repeat the main table's.
+    if (role !== 'generic' && canonicalRoles.has(role) && inOverlay(el)) continue;
     const name = nameOf(el);
     const isInteractive =
       interactiveRoles.has(role) ||
@@ -360,33 +465,32 @@ export function inspectSemanticPage(opts: SemanticInspectOptions = {}): Semantic
       (role === 'generic' && el !== document.body && !!name && scriptedClick(el));
     if (!name && !isInteractive && !canonicalRoles.has(role)) continue;
 
-    const input = el as HTMLInputElement;
+    const input = source as HTMLInputElement;
+    const toggle = source instanceof HTMLInputElement && (input.type === 'checkbox' || input.type === 'radio');
     const value =
       'value' in input && typeof input.value === 'string'
-        ? input.value.slice(0, 200)
-        : el.getAttribute('aria-valuetext') || undefined;
+        ? toggle && input.value === 'on'
+          ? undefined
+          : input.value.slice(0, 200)
+        : source.getAttribute('aria-valuetext') || undefined;
+    const ariaChecked = source.getAttribute('aria-checked');
     const states = {
-      disabled: (input as any).disabled === true || el.getAttribute('aria-disabled') === 'true',
-      checked:
-        typeof (input as any).checked === 'boolean'
-          ? Boolean((input as any).checked)
-          : el.getAttribute('aria-checked') === 'true'
-            ? true
-            : undefined,
+      disabled: (input as any).disabled === true || source.getAttribute('aria-disabled') === 'true',
+      checked: toggle ? input.checked : ariaChecked === 'true' ? true : ariaChecked === 'false' ? false : undefined,
       selected:
         typeof (input as any).selected === 'boolean'
           ? Boolean((input as any).selected)
-          : el.getAttribute('aria-selected') === 'true'
+          : source.getAttribute('aria-selected') === 'true'
             ? true
             : undefined,
-      expanded: el.hasAttribute('aria-expanded')
-        ? el.getAttribute('aria-expanded') === 'true'
+      expanded: source.hasAttribute('aria-expanded')
+        ? source.getAttribute('aria-expanded') === 'true'
         : undefined,
-      required: (input as any).required === true || el.getAttribute('aria-required') === 'true',
+      required: (input as any).required === true || source.getAttribute('aria-required') === 'true',
       invalid:
-        el.getAttribute('aria-invalid') === 'true' ||
+        source.getAttribute('aria-invalid') === 'true' ||
         (typeof (input as any).checkValidity === 'function' && !(input as any).checkValidity()),
-      readonly: (input as any).readOnly === true || el.getAttribute('aria-readonly') === 'true',
+      readonly: (input as any).readOnly === true || source.getAttribute('aria-readonly') === 'true',
     };
     const options =
       el instanceof HTMLSelectElement
@@ -453,15 +557,23 @@ export function inspectSemanticPage(opts: SemanticInspectOptions = {}): Semantic
   const textBlocks = new Set<Element>();
   const hasOwnText = (el: Element): boolean =>
     Array.from(el.childNodes).some((child) => child.nodeType === Node.TEXT_NODE && !!child.textContent?.trim());
+  const inScope = (el: Element): boolean => {
+    if (el === scanRoot || scanRoot.contains(el)) return true;
+    const row = inOverlay(el) ? el.closest(ROW) : null;
+    return !!row && scanRoot.contains(mainRowOf(row));
+  };
+  // What each listed ref stood for, kept after its element is gone so a re-rendered target can be found again.
+  if (!w.__chromeShellRefInfo) w.__chromeShellRefInfo = new Map();
+  const refInfo: Map<string, [string, string, string]> = w.__chromeShellRefInfo;
   const nodes: SemanticNode[] = [];
   for (const snapshot of snapshots) {
     if (nodes.length >= limit) break;
     const { el, ref, role, name, isInteractive, value, states, options, optionsTotal } = snapshot;
-    if (el !== scanRoot && !scanRoot.contains(el)) continue;
+    if (!inScope(el)) continue;
     if (roleFilter && role !== roleFilter) continue;
     if (exactName !== undefined && name.trim() !== exactName) continue;
     if (nameContains && !name.toLowerCase().includes(nameContains)) continue;
-    if (selectorMatches && !selectorMatches.has(el)) continue;
+    if (selectorMatches && !selectorMatches.has(el) && !selectorMatches.has(controls.get(el)!)) continue;
     let textBlock = false;
     if (mode === 'text' && !roleFilter) {
       textBlock =
@@ -516,7 +628,11 @@ export function inspectSemanticPage(opts: SemanticInspectOptions = {}): Semantic
     };
     const context = ['row', 'cell', 'columnheader'].includes(node.role) ? '' : node.context || '';
     const haystack = `${node.role} ${node.name || ''} ${node.value || ''} ${context}`.toLowerCase();
-    if (!nodeQuery || haystack.includes(nodeQuery)) nodes.push(node);
+    if (nodeQuery && !haystack.includes(nodeQuery)) continue;
+    nodes.push(node);
+    refInfo.delete(ref);
+    refInfo.set(ref, [role, name, node.context || '']);
+    if (refInfo.size > 2000) refInfo.delete(refInfo.keys().next().value!);
   }
 
   for (const key in refMap) {
@@ -590,20 +706,18 @@ export function diffSemanticStates(
   };
 }
 
-const flags = (node: SemanticNode): string => {
+/** States whose false value is the unremarkable default; a listing names them only when true. */
+const DEFAULT_FALSE = new Set(['disabled', 'selected', 'required', 'invalid']);
+
+/** `full` keeps default values: an updated node must show a state that went back to its default. */
+const flags = (node: SemanticNode, full: boolean): string => {
   const parts: string[] = [];
   const state = node.states || {};
-  for (const key of [
-    'disabled',
-    'checked',
-    'selected',
-    'expanded',
-    'required',
-    'invalid',
-  ] as const) {
-    if (state[key] !== undefined) parts.push(`${key}=${state[key]}`);
+  for (const key of ['disabled', 'checked', 'selected', 'expanded', 'required', 'invalid'] as const) {
+    if (state[key] === undefined || (!full && state[key] === false && DEFAULT_FALSE.has(key))) continue;
+    parts.push(`${key}=${state[key]}`);
   }
-  if (node.value !== undefined) parts.push(`value=${JSON.stringify(node.value)}`);
+  if (node.value !== undefined && (full || node.value !== '')) parts.push(`value=${JSON.stringify(node.value)}`);
   if (node.options?.length) {
     const more =
       (node.optionsTotal || 0) > node.options.length
@@ -614,7 +728,7 @@ const flags = (node: SemanticNode): string => {
   return parts.length ? ` ${parts.join(' ')}` : '';
 };
 
-export function renderSemanticNode(node: SemanticNode, prefix = '-'): string {
+export function renderSemanticNode(node: SemanticNode, prefix = '-', full = false): string {
   const name = node.name ? ` ${JSON.stringify(node.name)}` : '';
   // Table parts all share the table context; repeating it per cell only adds noise.
   const context =
@@ -622,7 +736,7 @@ export function renderSemanticNode(node: SemanticNode, prefix = '-'): string {
       ? ` in=${JSON.stringify(node.context)}`
       : '';
   const frame = node.frameId ? ` frame=${node.frameId}` : '';
-  return `${prefix} ${node.ref}${frame} ${node.role}${name}${flags(node)}${context}`;
+  return `${prefix} ${node.ref}${frame} ${node.role}${name}${flags(node, full)}${context}`;
 }
 
 export function renderSemanticState(state: SemanticPageState): string {
@@ -635,7 +749,7 @@ export function renderSemanticState(state: SemanticPageState): string {
 export function renderSemanticDelta(delta: SemanticPageDelta): string {
   const lines = [`delta v${delta.fromVersion}->v${delta.toVersion}`];
   for (const node of delta.added) lines.push(renderSemanticNode(node, '+'));
-  for (const node of delta.updated) lines.push(renderSemanticNode(node, '~'));
+  for (const node of delta.updated) lines.push(renderSemanticNode(node, '~', true));
   // Removed refs carry no names; past a handful they are only a count.
   if (delta.removed.length > 8) lines.push(`- ${delta.removed.length} nodes removed`);
   else for (const ref of delta.removed) lines.push(`- ${ref}`);

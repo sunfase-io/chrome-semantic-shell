@@ -9,7 +9,6 @@ export const TOOL_NAMES = {
     NAVIGATE: 'shell_navigate',
     SCREENSHOT: 'shell_screenshot',
     CLOSE_TABS: 'shell_close_tabs',
-    SWITCH_TAB: 'shell_switch_tab',
     CLICK: 'shell_click',
     FILL: 'shell_fill',
     NETWORK_CAPTURE: 'shell_network_capture',

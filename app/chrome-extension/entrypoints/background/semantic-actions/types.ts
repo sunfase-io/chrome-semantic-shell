@@ -511,9 +511,9 @@ export interface LoopElementsParams {
 export interface OpenTabParams {
   url?: Resolvable<string>;
   newWindow?: boolean;
-  /** Foreground the new tab (default true); false keeps the user's current tab in front. */
+  /** Make the new tab the active tab of its window (default false: the user's tab stays in front). */
   active?: boolean;
-  /** How long to wait for the load event before returning the tab as still loading. */
+  /** How long to wait for the document before returning the tab as still loading. */
   loadTimeoutMs?: number;
 }
 
@@ -521,6 +521,8 @@ export interface SwitchTabParams {
   tabId?: number;
   urlContains?: Resolvable<string>;
   titleContains?: Resolvable<string>;
+  /** Also raise the tab's window above other applications (default false). */
+  focusWindow?: boolean;
 }
 
 export interface CloseTabParams {

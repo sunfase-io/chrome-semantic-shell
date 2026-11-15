@@ -58,8 +58,9 @@ of what the operation changed.
 - Your everyday Chrome profile: logins, cookies, extensions, client certificates, and company SSO all remain.
 - **No** restarting Chrome with `--remote-debugging-port`, **no** separate profile, no approval prompt on every
   connection.
-- Works on background tabs (`--tab <id>`) without interrupting what you are doing; screenshots work on background
-  tabs too.
+- Never takes over your browser: no command activates a tab or raises the window except an explicit `tab switch`.
+  Background tabs, minimized windows and a Chrome window behind your editor keep rendering like a foreground tab while
+  the agent works on them, screenshots included.
 
 ### 2. A whole task in one call
 
@@ -80,15 +81,18 @@ of what the operation changed.
 ### 4. Accurate: it fails instead of guessing
 
 - Several matches fail with a list of candidates instead of clicking the first one.
-- Element references (refs) that went stale after a re-render are detected, so the wrong element is never clicked.
-- `select` really opens the dropdown component, waits for the real option, and clicks it, so Element UI and Ant
-  Design dropdowns work.
+- A ref whose element was re-rendered continues only when the same role and name can be found again uniquely, with a
+  warning; otherwise it fails, so the wrong element is never clicked.
+- `select` really opens the dropdown component, waits for the real option, and clicks it; searchable and remote
+  selects get the value typed first, so Element UI and Ant Design dropdowns work.
 - `scope=pipe` limits a search to one row or dialog, for example "the View button in the ORDER-001 row".
 
 ### 5. Understands front-end frameworks
 
 The semantic layer combines native HTML/ARIA with Vue 2, Vue 3, and React component information, recognizes
-Element UI / Ant / Fusion dialogs, and merges iframes, entering the right frame automatically when acting.
+Element UI / Ant / Fusion dialogs, fixed-column tables (each row listed once, with its checkbox and action buttons),
+checkboxes that hide their native input and dropdown menu items, and merges iframes, entering the right frame
+automatically when acting.
 
 ### 6. Failure means failure
 
@@ -279,7 +283,7 @@ chrome-shell 'query role=row query="ORDER-001" | query role=button name="View" s
 **4. Open a temporary page, read it, close it automatically**
 
 ```powershell
-chrome-shell 'tab new https://example.com active=false; defer { tab close }; extract css="h1" ; inspect text'
+chrome-shell 'tab new https://example.com; defer { tab close }; extract css="h1" ; inspect text'
 ```
 
 **5. Call an API with the page's login**
@@ -331,17 +335,17 @@ full grammar, options, and output format are in the [CLI reference](skills/chrom
 
 ### Navigation, tabs, waiting, assertions
 
-| Command    | Purpose                                                              | Example                                    |
-| ---------- | -------------------------------------------------------------------- | ------------------------------------------ |
-| `navigate` | Open a URL; fails on a network error page                            | `navigate https://example.com`             |
-| `back`     | Go back                                                              | `back`                                     |
-| `forward`  | Go forward                                                           | `forward`                                  |
-| `reload`   | Reload                                                               | `reload`                                   |
-| `tab`      | List / open / switch / close tabs                                    | `tab new https://example.com active=false` |
-| `window`   | List windows and their tabs                                          | `window`                                   |
-| `wait`     | Wait for text, an element, a URL change, navigation, or network idle | `wait text="Done" timeout=10000`           |
-| `assert`   | Assert text exists / element exists / element visible                | `assert text="Saved"`                      |
-| `dialog`   | Handle native alert / confirm / prompt                               | `dialog accept`                            |
+| Command    | Purpose                                                              | Example                          |
+| ---------- | -------------------------------------------------------------------- | -------------------------------- |
+| `navigate` | Open a URL; fails on a network error page                            | `navigate https://example.com`   |
+| `back`     | Go back                                                              | `back`                           |
+| `forward`  | Go forward                                                           | `forward`                        |
+| `reload`   | Reload                                                               | `reload`                         |
+| `tab`      | List / open / switch / close tabs                                    | `tab new https://example.com`    |
+| `window`   | List windows and their tabs                                          | `window`                         |
+| `wait`     | Wait for text, an element, a URL change, navigation, or network idle | `wait text="Done" timeout=10000` |
+| `assert`   | Assert text exists / element exists / element visible                | `assert text="Saved"`            |
+| `dialog`   | Handle native alert / confirm / prompt                               | `dialog accept`                  |
 
 ### Data and APIs
 

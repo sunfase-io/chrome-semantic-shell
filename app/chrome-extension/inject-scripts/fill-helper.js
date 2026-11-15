@@ -89,6 +89,14 @@ if (window.__FILL_HELPER_INITIALIZED__) {
         };
       }
 
+      // A styled checkbox shows its label and hides the native input: toggle the input it labels.
+      const labelled = element instanceof HTMLLabelElement ? element.control : null;
+      if (labelled instanceof HTMLInputElement && (labelled.type === 'checkbox' || labelled.type === 'radio')) {
+        const desired = labelled.type === 'radio' ? true : parseCheckedValue(value);
+        if (typeof desired !== 'boolean') return { error: CHECKED_VALUE_ERROR, elementInfo };
+        return await setToggle(labelled, desired, () => labelled.checked, elementInfo);
+      }
+
       const ariaRole = element.getAttribute('role');
       if (element.tagName !== 'INPUT' && ['checkbox', 'switch', 'radio'].includes(ariaRole)) {
         const desired = ariaRole === 'radio' ? true : parseCheckedValue(value);

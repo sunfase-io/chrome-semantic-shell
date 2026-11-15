@@ -133,24 +133,6 @@ export abstract class BaseBrowserToolExecutor implements ToolExecutor {
   }
 
   /**
-   * Optionally focus window and/or activate tab. Defaults preserve current behavior
-   * when caller sets activate/focus flags explicitly.
-   */
-  protected async ensureFocus(
-    tab: chrome.tabs.Tab,
-    options: { activate?: boolean; focusWindow?: boolean } = {},
-  ): Promise<void> {
-    const activate = options.activate === true;
-    const focusWindow = options.focusWindow === true;
-    if (focusWindow && typeof tab.windowId === 'number') {
-      await chrome.windows.update(tab.windowId, { focused: true });
-    }
-    if (activate && typeof tab.id === 'number') {
-      await chrome.tabs.update(tab.id, { active: true });
-    }
-  }
-
-  /**
    * Get the active tab. When windowId provided, search within that window; otherwise currentWindow.
    */
   protected async getActiveTabInWindow(windowId?: number): Promise<chrome.tabs.Tab | null> {

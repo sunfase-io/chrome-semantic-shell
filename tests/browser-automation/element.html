@@ -1,0 +1,396 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>Element UI structures</title>
+<!--
+  The DOM and CSS of Element UI 2.13 that chrome-shell must read, without the library: fixed-column
+  overlay tables with hidden copies in the main table, styled checkboxes over an opacity-0 native
+  input, row dropdowns appended to <body>, a fading message box reused for every dialog, and
+  select popups (one searchable and remote) with Vue's enter transition.
+-->
+<style>
+  body {
+    font: 14px sans-serif;
+    padding: 16px;
+  }
+  .el-menu {
+    display: flex;
+    gap: 16px;
+    list-style: none;
+    padding: 0;
+  }
+  .el-form-item {
+    margin: 8px 0;
+  }
+  .el-checkbox {
+    cursor: pointer;
+    display: inline-flex;
+    gap: 6px;
+    align-items: center;
+  }
+  .el-checkbox__input {
+    position: relative;
+    display: inline-block;
+  }
+  .el-checkbox__inner {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border: 1px solid #888;
+  }
+  .el-checkbox__original {
+    opacity: 0;
+    outline: none;
+    position: absolute;
+    margin: 0;
+    width: 0;
+    height: 0;
+    z-index: -1;
+  }
+  .is-checked .el-checkbox__inner {
+    background: #409eff;
+  }
+  .el-table {
+    position: relative;
+    width: 640px;
+    margin-top: 12px;
+    overflow: hidden;
+  }
+  .el-table table {
+    border-collapse: collapse;
+    table-layout: fixed;
+    width: 640px;
+    background: #fff;
+  }
+  .el-table th,
+  .el-table td {
+    height: 32px;
+    padding: 0 6px;
+    border-bottom: 1px solid #eee;
+    text-align: left;
+    white-space: nowrap;
+    overflow: hidden;
+  }
+  .el-table td.is-hidden > *,
+  .el-table th.is-hidden > * {
+    visibility: hidden;
+  }
+  .el-table__fixed,
+  .el-table__fixed-right {
+    position: absolute;
+    top: 0;
+    overflow: hidden;
+    box-shadow: 0 0 6px #ccc;
+  }
+  .el-table__fixed {
+    left: 0;
+    width: 44px;
+  }
+  .el-table__fixed-right {
+    right: 0;
+    width: 140px;
+  }
+  .el-table__fixed-right table {
+    position: relative;
+    left: -500px;
+  }
+  .el-dropdown-link {
+    cursor: pointer;
+    color: #409eff;
+  }
+  .el-button--text {
+    border: 0;
+    background: none;
+    color: #409eff;
+    cursor: pointer;
+  }
+  .el-popper {
+    position: absolute;
+    z-index: 2000;
+    background: #fff;
+    border: 1px solid #ddd;
+    list-style: none;
+    margin: 0;
+    padding: 4px 0;
+  }
+  .el-dropdown-menu__item,
+  .el-select-dropdown__item {
+    padding: 0 16px;
+    line-height: 30px;
+    cursor: pointer;
+  }
+  .el-zoom-in-top-enter-active {
+    transition:
+      transform 0.3s,
+      opacity 0.3s;
+    transform-origin: center top;
+  }
+  .el-zoom-in-top-enter {
+    opacity: 0;
+    transform: scaleY(0);
+  }
+  .el-message-box__wrapper {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.3);
+  }
+  .el-message-box {
+    background: #fff;
+    padding: 16px;
+    width: 380px;
+  }
+  .msgbox-fade-enter-active {
+    animation: msgbox-fade-in 0.3s;
+  }
+  @keyframes msgbox-fade-in {
+    0% {
+      opacity: 0;
+      transform: translate3d(0, -20px, 0);
+    }
+    100% {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  .mdc-radio__native-control {
+    position: absolute;
+    opacity: 0;
+    width: 20px;
+    height: 20px;
+    margin: 0;
+  }
+</style>
+<ul class="el-menu" role="menubar">
+  <li class="el-menu-item" role="menuitem" tabindex="0">首页</li>
+  <li class="el-menu-item" role="menuitem" tabindex="-1">采购管理</li>
+</ul>
+<form class="el-form">
+  <div class="el-form-item">
+    <label class="el-form-item__label" for="supplier">供应商</label>
+    <div class="el-select" data-remote
+      ><div class="el-input"
+        ><input
+          id="supplier"
+          class="el-input__inner"
+          readonly
+          autocomplete="off"
+          placeholder="请输入供应商" /></div
+    ></div>
+  </div>
+  <div class="el-form-item">
+    <label class="el-form-item__label" for="kind">付款类型</label>
+    <div class="el-select" data-options="物资采购,原料采购"
+      ><div class="el-input"
+        ><input
+          id="kind"
+          class="el-input__inner"
+          readonly
+          autocomplete="off"
+          placeholder="请选择" /></div
+    ></div>
+  </div>
+  <div class="el-form-item">
+    <label class="el-checkbox"
+      ><span class="el-checkbox__input"
+        ><span class="el-checkbox__inner"></span
+        ><input id="remember" type="checkbox" class="el-checkbox__original" /></span
+      ><span class="el-checkbox__label">记住选择</span></label
+    >
+  </div>
+  <div class="el-form-item">
+    <span class="mdc-radio"
+      ><input id="cap" type="radio" name="budget" class="mdc-radio__native-control" /></span
+    ><label for="cap">强制执行支出上限</label>
+  </div>
+</form>
+<div id="wizard"><button type="button" class="el-button" id="next">下一步</button></div>
+<button type="button" class="el-button" id="rerender">刷新表单</button>
+<button type="button" class="el-button" id="sync">同步接口</button>
+<div class="el-table" id="table"></div>
+<p id="log"></p>
+<div class="el-message-box__wrapper" role="dialog" aria-modal="true" style="display: none">
+  <div class="el-message-box">
+    <div class="el-message-box__header"
+      ><span class="el-message-box__title"></span
+      ><button type="button" class="el-message-box__headerbtn" aria-label="Close">×</button></div
+    >
+    <div class="el-message-box__content"><p class="el-message-box__message"></p></div>
+    <div class="el-message-box__btns"
+      ><button type="button" class="el-button" data-action="cancel">取消</button
+      ><button type="button" class="el-button" data-action="confirm">确定</button></div
+    >
+  </div>
+</div>
+<script>
+  const ROWS = [
+    ['HDFK001', '南昌晨宇科技发展有限公司', '审批通过'],
+    ['HDFK002', '江西铜业股份有限公司', '审批通过'],
+    ['HDFK003', '南昌晨光实业有限公司', '草稿'],
+  ];
+  const SUPPLIERS = ['南昌晨宇科技发展有限公司', '南昌晨光实业有限公司', '江西铜业股份有限公司'];
+  window.state = { log: [], selected: [], next: 0 };
+  const log = (entry) => {
+    state.log.push(entry);
+    document.querySelector('#log').textContent = entry;
+  };
+  const nextFrame = (fn) => requestAnimationFrame(() => requestAnimationFrame(fn));
+
+  // Fixed columns: the main table and two overlays each render every cell; the main table hides its
+  // fixed cells' content and each overlay hides the rest.
+  const checkbox = () =>
+    '<label class="el-checkbox"><span class="el-checkbox__input"><span class="el-checkbox__inner"></span><input type="checkbox" class="el-checkbox__original"></span></label>';
+  const ops =
+    '<button type="button" class="el-button el-button--text">查看</button> <span class="el-dropdown"><span class="el-dropdown-link" role="button" tabindex="0" aria-haspopup="list">更多</span></span>';
+  const table = (visible) => {
+    const cell = (tag, column, html) =>
+      `<${tag}${visible(column) ? '' : ' class="is-hidden"'}><div class="cell">${html}</div></${tag}>`;
+    const head = ['', '单号', '供应商', '状态', '操作']
+      .map((text, column) => cell('th', column, column ? text : checkbox()))
+      .join('');
+    const body = ROWS.map(
+      (row, index) =>
+        `<tr class="el-table__row" data-row="${index}">${[checkbox(), ...row, ops].map((html, column) => cell('td', column, html)).join('')}</tr>`,
+    ).join('');
+    return `<table><colgroup><col width="44"><col width="120"><col width="240"><col width="96"><col width="140"></colgroup><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
+  };
+  document.querySelector('#table').innerHTML =
+    `<div class="el-table__body-wrapper">${table((column) => column > 0 && column < 4)}</div>` +
+    `<div class="el-table__fixed">${table((column) => column === 0)}</div>` +
+    `<div class="el-table__fixed-right">${table((column) => column === 4)}</div>`;
+  document.querySelector('#table').addEventListener('change', (event) => {
+    const row = event.target.closest('tr[data-row]');
+    if (!row) return;
+    // Vue renders the one checked state into every copy of the row.
+    for (const copy of document.querySelectorAll(
+      `tr[data-row="${row.dataset.row}"] .el-checkbox__original`,
+    ))
+      copy.checked = event.target.checked;
+    state.selected = ROWS.filter(
+      (_, index) =>
+        document.querySelector(`tr[data-row="${index}"] .el-checkbox__original`).checked,
+    ).map((r) => r[0]);
+  });
+
+  // A message box: one wrapper reused for every dialog, fading in.
+  const box = document.querySelector('.el-message-box__wrapper');
+  let pending;
+  const messageBox = (title, message, onConfirm) => {
+    box.setAttribute('aria-label', title);
+    box.querySelector('.el-message-box__title').textContent = title;
+    box.querySelector('.el-message-box__message').textContent = message;
+    pending = onConfirm;
+    box.style.display = 'flex';
+    box.classList.add('msgbox-fade-enter-active');
+    box.addEventListener('animationend', () => box.classList.remove('msgbox-fade-enter-active'), {
+      once: true,
+    });
+  };
+  // Like Element UI: the promise of the closing box settles on the next tick, so a chained box reuses
+  // the wrapper at once.
+  box.addEventListener('click', (event) => {
+    const action = event.target.dataset?.action;
+    if (!action) return;
+    const confirmed = pending;
+    box.style.display = 'none';
+    if (action === 'confirm') Promise.resolve().then(() => confirmed?.());
+  });
+  document.querySelector('#sync').onclick = () =>
+    messageBox('同步接口', `已勾选 ${state.selected.length} 条单据，确认发起？`, () =>
+      messageBox('同步结果', state.selected.map((code) => code + '：同步失败').join('；'), () =>
+        log('synced ' + state.selected.join(',')),
+      ),
+    );
+
+  // Row dropdowns: the menu is appended to <body> on first open.
+  const popup = (anchor, className, html) => {
+    const menu = Object.assign(document.createElement('ul'), {
+      className: `${className} el-popper`,
+    });
+    menu.innerHTML = html;
+    const rect = anchor.getBoundingClientRect();
+    Object.assign(menu.style, {
+      left: `${rect.left + scrollX}px`,
+      top: `${rect.bottom + scrollY + 4}px`,
+    });
+    document.body.append(menu);
+    menu.classList.add('el-zoom-in-top-enter', 'el-zoom-in-top-enter-active');
+    nextFrame(() => menu.classList.remove('el-zoom-in-top-enter'));
+    menu.addEventListener(
+      'transitionend',
+      () => menu.classList.remove('el-zoom-in-top-enter-active'),
+      { once: true },
+    );
+    return menu;
+  };
+  const closePopups = () =>
+    document.querySelectorAll('.el-popper').forEach((menu) => menu.remove());
+  document.addEventListener('click', (event) => {
+    const trigger = event.target.closest('.el-dropdown-link');
+    if (!trigger) return;
+    closePopups();
+    const code = ROWS[trigger.closest('tr').dataset.row][0];
+    const menu = popup(
+      trigger,
+      'el-dropdown-menu',
+      ['撤回', '反审批', '删除']
+        .map((item) => `<li tabindex="-1" class="el-dropdown-menu__item">${item}</li>`)
+        .join(''),
+    );
+    menu.addEventListener('click', (click) => {
+      const item = click.target.closest('.el-dropdown-menu__item')?.textContent;
+      closePopups();
+      if (item === '反审批')
+        messageBox('反审批', '请确认要反审批该单据吗？', () => log('reversed ' + code));
+      else if (item) log(item + ' ' + code);
+    });
+  });
+
+  // Selects: readonly until opened; the remote one unlocks its input, filters on keyup and answers late.
+  for (const select of document.querySelectorAll('.el-select')) {
+    const input = select.querySelector('input');
+    let menu;
+    const render = (items) => {
+      menu.innerHTML = items.length
+        ? items
+            .map((item) => `<li class="el-select-dropdown__item"><span>${item}</span></li>`)
+            .join('')
+        : '<p class="el-select-dropdown__empty">无数据</p>';
+    };
+    input.addEventListener('click', (event) => {
+      event.stopPropagation();
+      closePopups();
+      menu = popup(input, 'el-select-dropdown', '');
+      if ('remote' in select.dataset) input.readOnly = false;
+      render('remote' in select.dataset ? [] : select.dataset.options.split(','));
+      menu.addEventListener('click', (click) => {
+        const item = click.target.closest('.el-select-dropdown__item');
+        if (!item) return;
+        input.value = item.textContent;
+        input.readOnly = true;
+        closePopups();
+      });
+    });
+    let timer;
+    input.addEventListener('keyup', () => {
+      clearTimeout(timer);
+      timer = setTimeout(
+        () =>
+          setTimeout(
+            () =>
+              menu && render(SUPPLIERS.filter((name) => input.value && name.includes(input.value))),
+            300,
+          ),
+        300,
+      );
+    });
+  }
+
+  // A form section re-rendered with identical markup: refs listed before point at detached elements.
+  document
+    .querySelector('#wizard')
+    .addEventListener('click', (event) => event.target.id === 'next' && state.next++);
+  document.querySelector('#rerender').onclick = () =>
+    (document.querySelector('#wizard').innerHTML = document.querySelector('#wizard').innerHTML);
+</script>

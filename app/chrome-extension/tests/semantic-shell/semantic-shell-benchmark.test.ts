@@ -20,7 +20,7 @@ afterEach(() => {
 });
 
 describe('semantic shell deterministic footprint benchmark', () => {
-  it('cuts representative page output by at least 70% and keeps the mutation actionable', () => {
+  it('cuts representative page output by at least 70% and keeps the mutation actionable', async () => {
     const noise = Array.from(
       { length: 120 },
       (_, index) =>
@@ -36,13 +36,13 @@ describe('semantic shell deterministic footprint benchmark', () => {
     });
 
     const fullChars = document.documentElement.outerHTML.length;
-    const before = inspectSemanticPage({ mode: 'forms' });
+    const before = await inspectSemanticPage({ mode: 'forms' });
     const semanticChars = renderSemanticState(before).length;
     expect(semanticChars / fullChars).toBeLessThan(0.3);
 
     const button = document.querySelector<HTMLButtonElement>('#save')!;
     button.disabled = true;
-    const after = inspectSemanticPage({ mode: 'forms' });
+    const after = await inspectSemanticPage({ mode: 'forms' });
     const delta = diffSemanticStates(before, after);
     const output = renderSemanticDelta(delta);
     expect(delta.updated).toHaveLength(1);
@@ -50,7 +50,7 @@ describe('semantic shell deterministic footprint benchmark', () => {
     expect(output.length / fullChars).toBeLessThan(0.1);
   });
 
-  it('models an 80% round-trip reduction for the standard form loop', () => {
+  it('models an 80% round-trip reduction for the standard form loop', async () => {
     const legacyCalls = ['read', 'fill-domain', 'fill-protocol', 'click-submit', 'read-result'];
     const coreCalls = ['chrome_shell'];
     const reduction = 1 - coreCalls.length / legacyCalls.length;

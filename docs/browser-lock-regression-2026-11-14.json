@@ -1,0 +1,100 @@
+{
+  "fixture": "synthetic localhost",
+  "results": [
+    {
+      "id": "perception",
+      "status": "passed",
+      "duration_ms": 784.5
+    },
+    {
+      "id": "form",
+      "status": "passed",
+      "duration_ms": 1334.8
+    },
+    {
+      "id": "check",
+      "status": "passed",
+      "duration_ms": 1053.5
+    },
+    {
+      "id": "dblclick",
+      "status": "passed",
+      "duration_ms": 923.2
+    },
+    {
+      "id": "keyboard",
+      "status": "passed",
+      "duration_ms": 947.4
+    },
+    {
+      "id": "hover",
+      "status": "passed",
+      "duration_ms": 1250.9
+    },
+    {
+      "id": "scroll",
+      "status": "passed",
+      "duration_ms": 676.7
+    },
+    {
+      "id": "drag",
+      "status": "passed",
+      "duration_ms": 832.3
+    },
+    {
+      "id": "async-wait",
+      "status": "passed",
+      "duration_ms": 961.2
+    },
+    {
+      "id": "wait-idle-gone",
+      "status": "passed",
+      "duration_ms": 1544.2
+    },
+    {
+      "id": "dialog-role",
+      "status": "passed",
+      "duration_ms": 939.4
+    },
+    {
+      "id": "type-trusted",
+      "status": "passed",
+      "duration_ms": 741.4
+    },
+    {
+      "id": "screenshot",
+      "status": "passed",
+      "duration_ms": 733.2
+    },
+    {
+      "id": "screenshot-element",
+      "status": "passed",
+      "duration_ms": 677.4
+    },
+    {
+      "id": "screenshot-full",
+      "status": "passed",
+      "duration_ms": 798.8
+    },
+    {
+      "id": "element-fixed-row",
+      "status": "passed",
+      "duration_ms": 1847.4
+    },
+    {
+      "id": "element-message-box",
+      "status": "passed",
+      "duration_ms": 1879.0
+    },
+    {
+      "id": "element-select",
+      "status": "passed",
+      "duration_ms": 2339.1
+    },
+    {
+      "id": "browser-dialog",
+      "status": "passed",
+      "duration_ms": 669.8
+    }
+  ]
+}

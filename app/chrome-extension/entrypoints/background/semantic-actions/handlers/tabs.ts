@@ -9,6 +9,7 @@
  */
 
 import { failed, invalid, ok, tryResolveString } from '../registry';
+import { isDocumentReady } from '../runtime/wait';
 import type { ActionHandler, DownloadInfo, DownloadState, VariableStore } from '../types';
 
 /** Default timeout for tab operations */
@@ -60,7 +61,7 @@ export const openTabHandler: ActionHandler<'openTab'> = {
         // Create new window
         const window = await chrome.windows.create({
           url: url || 'about:blank',
-          focused: true,
+          focused: false,
         });
 
         const tab = window?.tabs?.[0];
@@ -69,10 +70,9 @@ export const openTabHandler: ActionHandler<'openTab'> = {
         }
         tabId = tab.id;
       } else {
-        // Create new tab in current window
         const tab = await chrome.tabs.create({
           url: url || 'about:blank',
-          active: params.active !== false,
+          active: params.active === true,
         });
 
         if (!tab.id) {
@@ -86,12 +86,12 @@ export const openTabHandler: ActionHandler<'openTab'> = {
         return failed('TIMEOUT', 'Open tab cancelled');
       }
 
-      // Wait for the load event if a URL was given. A page that keeps loading (long polling, slow
-      // assets) is still a usable tab: return it with a warning instead of failing and orphaning it.
+      // Wait for the document if a URL was given. A page that is still loading is a usable tab:
+      // return it with a warning instead of failing and orphaning it.
       if (url) {
         const loadTimeoutMs = params.loadTimeoutMs ?? action.policy?.timeout?.ms ?? DEFAULT_TAB_TIMEOUT_MS;
         try {
-          await waitForTabComplete(tabId, loadTimeoutMs, ctx.signal);
+          await waitForDocument(tabId, loadTimeoutMs, ctx.signal);
         } catch (error) {
           if (ctx.signal?.aborted) throw error;
           return {
@@ -203,12 +203,11 @@ export const switchTabHandler: ActionHandler<'switchTab'> = {
         return failed('TAB_NOT_FOUND', 'No matching tab found');
       }
 
-      // Activate the tab
+      // The one command that changes what the user sees. The window stays behind the user's current
+      // application unless explicitly raised.
       await chrome.tabs.update(targetTabId, { active: true });
-
-      // Focus the window containing the tab
-      const tab = await chrome.tabs.get(targetTabId);
-      if (tab.windowId) {
+      if (params.focusWindow === true) {
+        const tab = await chrome.tabs.get(targetTabId);
         await chrome.windows.update(tab.windowId, { focused: true });
       }
 
@@ -434,41 +433,13 @@ export const handleDownloadHandler: ActionHandler<'handleDownload'> = {
 // Helper Functions
 // ================================
 
-/**
- * Wait for a tab to complete loading
- */
-async function waitForTabComplete(
-  tabId: number,
-  timeoutMs: number,
-  signal?: AbortSignal,
-): Promise<void> {
-  const startTime = Date.now();
-
-  return new Promise((resolve, reject) => {
-    const checkStatus = async () => {
-      if (signal?.aborted) {
-        reject(new Error('Open tab cancelled'));
-        return;
-      }
-      try {
-        const tab = await chrome.tabs.get(tabId);
-
-        if (tab.status === 'complete') {
-          resolve();
-          return;
-        }
-
-        if (Date.now() - startTime > timeoutMs) {
-          reject(new Error(`Tab load timeout after ${timeoutMs}ms`));
-          return;
-        }
-
-        setTimeout(checkStatus, 100);
-      } catch (e) {
-        reject(e);
-      }
-    };
-
-    checkStatus();
-  });
+/** Wait until the tab's document is parsed; slow images and long polling do not hold the tab back. */
+async function waitForDocument(tabId: number, timeoutMs: number, signal?: AbortSignal): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    if (signal?.aborted) throw new Error('Open tab cancelled');
+    if (await isDocumentReady(tabId)) return;
+    if (Date.now() >= deadline) throw new Error(`tab ${tabId} document not ready after ${timeoutMs}ms`);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
 }

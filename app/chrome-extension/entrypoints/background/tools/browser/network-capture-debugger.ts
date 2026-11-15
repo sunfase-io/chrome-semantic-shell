@@ -790,11 +790,8 @@ class NetworkDebuggerStartTool extends BaseBrowserToolExecutor {
         }); // More specific query
         if (existingTabs.length > 0 && existingTabs[0]?.id) {
           tabToOperateOn = existingTabs[0];
-          // Ensure window gets focus and tab is truly activated
-          await chrome.windows.update(tabToOperateOn.windowId, { focused: true });
-          await chrome.tabs.update(tabToOperateOn.id!, { active: true });
         } else {
-          tabToOperateOn = await chrome.tabs.create({ url: targetUrl, active: true });
+          tabToOperateOn = await chrome.tabs.create({ url: targetUrl, active: false });
           // Wait for tab to be somewhat ready. A better way is to listen to tabs.onUpdated status='complete'
           // but for debugger attachment, it just needs the tabId.
           await new Promise((resolve) => setTimeout(resolve, 500)); // Short delay

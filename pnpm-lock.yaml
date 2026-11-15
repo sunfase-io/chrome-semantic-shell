@@ -53,6 +53,9 @@ importers:
 
   app/chrome-extension:
     dependencies:
+      acorn:
+        specifier: ^8.16.0
+        version: 8.16.0
       chrome-semantic-shell-shared:
         specifier: workspace:*
         version: link:../../packages/shared

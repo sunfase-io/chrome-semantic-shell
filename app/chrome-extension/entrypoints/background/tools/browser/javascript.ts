@@ -7,12 +7,14 @@
  *   chrome.userScripts.execute in the MAIN world (when "Allow User Scripts" is enabled),
  *   otherwise chrome.scripting.executeScript in the MAIN world (subject to page CSP).
  *
- * A single expression returns its value implicitly; statement code returns via `return`.
- * The expression form is attempted first: a syntax error is raised at compile time before any
- * code runs, so retrying as a statement body never repeats side effects. Runtime errors are caught
- * inside the page wrapper and reported as values.
+ * A single expression returns its value implicitly, and so does the last expression statement of
+ * statement code without `return`, as in a console. The code is parsed once in the extension to
+ * choose its form, so it runs once on every engine. Code the parser rejects falls back to the
+ * engine: the expression form first, whose syntax error is raised at compile time before any code
+ * runs, then the statement body. Runtime errors are caught inside the page wrapper and reported as values.
  */
 
+import { parse, type Node, type Options as ParseOptions } from 'acorn';
 import { createErrorResponse, ToolResult } from '@/common/tool-handler';
 import { BaseBrowserToolExecutor } from '../base-browser';
 import { TOOL_NAMES } from 'chrome-semantic-shell-shared';
@@ -71,9 +73,9 @@ interface JavaScriptToolResult {
   engine: ExecutionEngine;
   result?: string;
   truncated?: boolean;
-  /** The code ran as a single expression whose value was returned implicitly. */
-  expression?: boolean;
-  /** The completion value was `undefined` (statement code without `return`). */
+  /** How the value was returned; see {@link Returns}. */
+  returns?: Returns;
+  /** The returned value was `undefined`. */
   undefinedResult?: boolean;
   warnings?: string[];
   error?: ExecutionError;
@@ -92,7 +94,7 @@ type ExecutionSuccess = {
   engine: ExecutionEngine;
   output: string;
   truncated: boolean;
-  expression: boolean;
+  returns: Returns;
   undefinedResult: boolean;
 };
 
@@ -105,6 +107,65 @@ type ExecutionFailure = {
 type ExecutionResult = ExecutionSuccess | ExecutionFailure;
 
 type CodeForm = 'expression' | 'body';
+
+/**
+ * `expression`: the code is one expression. `last`: statement code ending in an expression statement,
+ * whose value is returned. `return`: the code returns explicitly. `none`: statement code whose last
+ * statement is no expression. `unknown`: the parser rejected the code and the engine ran it as a body.
+ */
+export type Returns = 'expression' | 'last' | 'return' | 'none' | 'unknown';
+
+interface CodePlan {
+  form: CodeForm;
+  code: string;
+  returns: Returns;
+}
+
+const PARSE: ParseOptions = {
+  ecmaVersion: 'latest',
+  sourceType: 'script',
+  allowReturnOutsideFunction: true,
+  allowAwaitOutsideFunction: true,
+};
+const FUNCTION = /^(?:FunctionDeclaration|FunctionExpression|ArrowFunctionExpression)$/;
+
+/** A `return` of the code itself, not of a function it defines. */
+function returnsExplicitly(node: Node): boolean {
+  if (node.type === 'ReturnStatement') return true;
+  if (FUNCTION.test(node.type)) return false;
+  return Object.values(node).some((child) =>
+    Array.isArray(child)
+      ? child.some((item) => item && typeof item.type === 'string' && returnsExplicitly(item))
+      : child && typeof child.type === 'string' && returnsExplicitly(child),
+  );
+}
+
+/** Choose how the code runs, or undefined when the parser rejects it and the engine must decide. */
+export function planCode(code: string): CodePlan | undefined {
+  try {
+    // The same wrapping as the expression form of the page program.
+    if (parse(`(\n${code.replace(/;\s*$/, '')}\n)`, PARSE).body.length === 1) {
+      return { form: 'expression', code, returns: 'expression' };
+    }
+  } catch {
+    // Statement code.
+  }
+  let program;
+  try {
+    program = parse(code, PARSE);
+  } catch {
+    return undefined;
+  }
+  if (returnsExplicitly(program)) return { form: 'body', code, returns: 'return' };
+  const last = program.body.at(-1);
+  if (last?.type !== 'ExpressionStatement' || 'directive' in last) return { form: 'body', code, returns: 'none' };
+  const value = last.expression;
+  return {
+    form: 'body',
+    code: `${code.slice(0, last.start)}return (${code.slice(value.start, value.end)});${code.slice(last.end)}`,
+    returns: 'last',
+  };
+}
 
 /** Value produced by the in-page wrapper. */
 interface PageOutcome {
@@ -197,7 +258,7 @@ function isPageOutcome(value: unknown): value is PageOutcome {
 function outcomeToResult(
   engine: ExecutionEngine,
   outcome: PageOutcome,
-  form: CodeForm,
+  returns: Returns,
   options: ExecutionOptions,
 ): ExecutionResult {
   if (!outcome.ok) {
@@ -217,23 +278,30 @@ function outcomeToResult(
     engine,
     output: limited.text,
     truncated: limited.truncated,
-    expression: form === 'expression',
+    returns,
     undefinedResult: outcome.isUndefined === true,
   };
 }
 
-/** Try the expression form, then the statement body, only when the former failed to compile. */
+/**
+ * Run the planned form; without a plan, the expression form and then the statement body, the
+ * latter only when the former failed to compile.
+ */
 async function runForms(
   engine: ExecutionEngine,
   code: string,
   options: ExecutionOptions,
   evaluate: (program: string) => Promise<{ outcome?: PageOutcome; compileError?: ExecutionError }>,
 ): Promise<ExecutionResult> {
+  const plan = planCode(code);
+  const attempts: CodePlan[] = plan
+    ? [plan]
+    : [{ form: 'expression', code, returns: 'expression' }, { form: 'body', code, returns: 'unknown' }];
   let compileError: ExecutionError | undefined;
-  for (const form of ['expression', 'body'] as const) {
-    const attempt = await evaluate(buildPageProgram(code, form, options.vars));
-    if (attempt.outcome) return outcomeToResult(engine, attempt.outcome, form, options);
-    compileError = attempt.compileError;
+  for (const attempt of attempts) {
+    const ran = await evaluate(buildPageProgram(attempt.code, attempt.form, options.vars));
+    if (ran.outcome) return outcomeToResult(engine, ran.outcome, attempt.returns, options);
+    compileError = ran.compileError;
     if (compileError?.kind !== 'syntax_error') break;
   }
   return {
@@ -521,7 +589,7 @@ class JavaScriptTool extends BaseBrowserToolExecutor {
       engine: result.engine,
       result: result.output,
       truncated: result.truncated || undefined,
-      expression: result.expression || undefined,
+      returns: result.returns,
       undefinedResult: result.undefinedResult || undefined,
       warnings: warnings?.length ? warnings : undefined,
       metrics: { elapsedMs: Math.round(performance.now() - startTime) },

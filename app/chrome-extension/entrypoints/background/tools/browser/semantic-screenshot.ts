@@ -3,10 +3,10 @@
  *
  * The image is returned as data to the CLI, which writes the file itself: no chrome.downloads call,
  * so neither a "download multiple files" permission prompt nor a Save-As dialog can block it.
- * Capture targets the requested tab directly; only when the renderer of a background tab does not
- * produce a frame in time is the tab activated briefly and the previous tab restored.
+ * Capture targets the requested tab directly and never activates it.
  */
 import { cdpSessionManager } from '@/utils/cdp-session-manager';
+import { holdForeground, tabView } from './background-session';
 
 export interface SemanticScreenshotRequest {
   tabId: number;
@@ -21,8 +21,6 @@ export interface SemanticScreenshot {
   mimeType: 'image/png';
   width: number;
   height: number;
-  /** The background tab had to be brought to the front for rendering. */
-  activated: boolean;
   /** A full-page capture was cut at MAX_CAPTURE_HEIGHT. */
   clipped: boolean;
 }
@@ -125,7 +123,7 @@ async function captureOnce(
   tabId: number,
   request: SemanticScreenshotRequest,
   elementRect: Rect | undefined,
-): Promise<Omit<SemanticScreenshot, 'activated'>> {
+): Promise<SemanticScreenshot> {
   return cdpSessionManager.withSession(tabId, 'semantic-screenshot', async () => {
     const send = <T = any>(method: string, params?: object) => cdpSessionManager.sendCommand<T>(tabId, method, params);
     const metrics: any = await send('Page.getLayoutMetrics');
@@ -160,39 +158,26 @@ async function captureOnce(
   });
 }
 
+/**
+ * Captures through CDP inside a background session, so a background tab or an occluded or minimized
+ * window renders without being activated.
+ */
 export async function captureSemanticScreenshot(request: SemanticScreenshotRequest): Promise<SemanticScreenshot> {
   const { tabId } = request;
   const token = `shot_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+  const hold = await holdForeground(tabId, (await tabView(tabId)) === 'hidden');
   try {
     const rect = request.ref ? await locateRef(tabId, request.ref, request.frameId ?? 0, token) : undefined;
     const budget = Math.max(1000, Math.min(RENDER_WAIT_MS, request.timeoutMs - 500));
-    try {
-      return { ...(await withDeadline(captureOnce(tabId, request, rect), budget, 'render timeout')), activated: false };
-    } catch (error) {
-      const tab = await chrome.tabs.get(tabId);
-      const message = error instanceof Error ? error.message : String(error);
-      if (tab.active || !/render timeout/.test(message)) throw error;
-      // A background renderer may not produce frames; activate it just for the capture.
-      const [previous] = await chrome.tabs.query({ active: true, windowId: tab.windowId });
-      await chrome.tabs.update(tabId, { active: true });
-      try {
-        await new Promise((resolve) => setTimeout(resolve, 200));
-        const retryRect = request.ref ? await locateRef(tabId, request.ref, request.frameId ?? 0, token) : undefined;
-        const remaining = Math.max(1000, request.timeoutMs - budget - 500);
-        return { ...(await withDeadline(captureOnce(tabId, request, retryRect), remaining, 'render timeout')), activated: true };
-      } finally {
-        if (previous?.id && previous.id !== tabId) await chrome.tabs.update(previous.id, { active: true }).catch(() => undefined);
-      }
-    }
+    return await withDeadline(captureOnce(tabId, request, rect), budget, 'render timeout');
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     if (/render timeout|readback|Unable to capture/i.test(message)) {
-      throw new Error(
-        `Chrome did not render tab ${tabId} (the screen may be locked or the window minimized); unlock or restore the window and retry`,
-      );
+      throw new Error(`Chrome did not render tab ${tabId} (${message}); the screen may be locked`);
     }
     throw error;
   } finally {
+    hold.release();
     await clearMarks(tabId, token);
   }
 }

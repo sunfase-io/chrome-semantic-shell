@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildPageProgram } from '@/entrypoints/background/tools/browser/javascript';
+import { buildPageProgram, planCode } from '@/entrypoints/background/tools/browser/javascript';
 import {
   describeInputSchema,
   describeJavascriptFailure,
@@ -40,14 +40,42 @@ describe('javascript code forms', () => {
   });
 });
 
+describe('javascript code plan', () => {
+  it('runs a single expression as one, object literals included', () => {
+    expect(planCode('document.title')).toMatchObject({ form: 'expression', returns: 'expression' });
+    expect(planCode('{ a: 1 }')).toMatchObject({ form: 'expression' });
+    expect(planCode('await fetch("/x").then((r) => r.json());')).toMatchObject({ form: 'expression' });
+  });
+
+  it('returns the last expression statement of statement code, as a console does', async () => {
+    const plan = planCode('const rows = [1, 2, 3];\nrows.map((n) => n * 2) // doubled');
+    expect(plan).toMatchObject({ form: 'body', returns: 'last' });
+    await expect(run(plan!.code, plan!.form)).resolves.toMatchObject({ value: [2, 4, 6] });
+    await expect(run(planCode('let a = 1; a += 2; a')!.code, 'body')).resolves.toMatchObject({ value: 3 });
+  });
+
+  it('leaves code that returns, or ends in another statement, as written', () => {
+    expect(planCode('if (x) return 1; const f = () => { return 2 }; f()')).toMatchObject({ returns: 'return', code: 'if (x) return 1; const f = () => { return 2 }; f()' });
+    expect(planCode('const f = () => { return 2 }; f()')).toMatchObject({ returns: 'last' });
+    expect(planCode('for (const x of [1]) { console.log(x) }')).toMatchObject({ returns: 'none' });
+    expect(planCode('"use strict"')).toMatchObject({ returns: 'expression' });
+  });
+
+  it('defers code the parser rejects to the engine', () => {
+    expect(planCode('const = 1')).toBeUndefined();
+  });
+});
+
 describe('javascript step output', () => {
   it('prints the decoded value and warns about truncation or a missing return', () => {
-    const ok = javascriptStepOutcome(JSON.stringify({ success: true, result: '{"a":1}', expression: true }));
+    const ok = javascriptStepOutcome(JSON.stringify({ success: true, result: '{"a":1}', returns: 'expression' }));
     expect(ok).toEqual({ value: { a: 1 }, line: '{"a":1}', warnings: [] });
     const truncated = javascriptStepOutcome(JSON.stringify({ success: true, result: 'abc', truncated: true }));
     expect(truncated.warnings[0]).toContain('result truncated');
-    const missing = javascriptStepOutcome(JSON.stringify({ success: true, result: 'undefined', undefinedResult: true }));
-    expect(missing.warnings[0]).toContain('explicit return');
+    const missing = javascriptStepOutcome(JSON.stringify({ success: true, result: 'undefined', undefinedResult: true, returns: 'none' }));
+    expect(missing.warnings[0]).toContain('return the value explicitly');
+    const called = javascriptStepOutcome(JSON.stringify({ success: true, result: 'undefined', undefinedResult: true, returns: 'last' }));
+    expect(called.warnings).toEqual([]);
   });
 
   it('reduces a failure envelope to one line', () => {

@@ -1,4 +1,4 @@
-export { navigateTool, closeTabsTool, switchTabTool } from './common';
+export { navigateTool, closeTabsTool } from './common';
 export { screenshotTool } from './screenshot';
 export { clickTool, fillTool } from './interaction';
 export { keyboardTool } from './keyboard';

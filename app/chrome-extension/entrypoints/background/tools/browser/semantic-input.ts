@@ -3,6 +3,7 @@
  * Page-dispatched KeyboardEvents are untrusted: they neither insert text nor trigger default actions.
  */
 import { cdpSessionManager } from '@/utils/cdp-session-manager';
+import { holdForeground } from './background-session';
 
 interface KeyDefinition {
   key: string;
@@ -79,18 +80,17 @@ export function parseKeySequence(spec: string): KeyChord[] {
 }
 
 /**
- * A tab in an unfocused or occluded window drops key events at the renderer; focus emulation makes
- * the page behave as focused for the duration of the input, as headless automation does.
+ * A tab in an unfocused or occluded window drops key events at the renderer. Input runs inside a
+ * background session, which keeps the page focused for the whole program; toggling focus off after
+ * each key would blur the field and close the suggestion list the next key is meant for.
  */
 async function withFocusedInput<T>(tabId: number, fn: () => Promise<T>): Promise<T> {
-  return cdpSessionManager.withSession(tabId, 'semantic-input', async () => {
-    await cdpSessionManager.sendCommand(tabId, 'Emulation.setFocusEmulationEnabled', { enabled: true });
-    try {
-      return await fn();
-    } finally {
-      await cdpSessionManager.sendCommand(tabId, 'Emulation.setFocusEmulationEnabled', { enabled: false }).catch(() => undefined);
-    }
-  });
+  const hold = await holdForeground(tabId, false);
+  try {
+    return await fn();
+  } finally {
+    hold.release();
+  }
 }
 
 export async function pressKeys(tabId: number, spec: string): Promise<void> {

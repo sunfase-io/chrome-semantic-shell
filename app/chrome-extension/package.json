@@ -19,6 +19,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "acorn": "^8.16.0",
     "chrome-semantic-shell-shared": "workspace:*"
   },
   "devDependencies": {

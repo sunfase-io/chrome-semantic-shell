@@ -66,6 +66,28 @@ describe('chrome shell runtime', () => {
     expect(await text('fillform 邮箱=$email 密码=$pwd')).toMatchObject({ isError: false });
   });
 
+  it('points a guessed name at the real command, tab action or option, and still fails', async () => {
+    const text = async (script: string) => {
+      const result = await chromeShellTool.execute({ script, dryRun: true });
+      expect(result.isError).toBe(true);
+      return (result.content[0] as any).text as string;
+    };
+    expect(await text('open https://example.com')).toContain('unsupported command "open" (did you mean tab new URL, or navigate URL in the current tab?)');
+    expect(await text('help tab')).toContain('chrome-shell help [command]');
+    expect(await text('inspcet forms')).toContain('(did you mean inspect?)');
+    expect(await text('tab activate 12')).toContain('tab: unsupported action "activate" (did you mean switch?)');
+    expect(await text('tab nwe https://example.com')).toContain('(did you mean new?)');
+    expect(await text('wait ms=500')).toContain('"ms" (did you mean wait N?)');
+    expect(await text('query role=row in=@ref_1')).toContain('"in" (did you mean scope=?)');
+    expect(await text('wait txet="ok"')).toContain('"txet" (did you mean text?)');
+  });
+
+  it('accepts the new wait conditions and inspect since=', async () => {
+    for (const script of ['wait idle timeout=3000', 'wait gone="加载中"', 'inspect forms since=v12', 'tab switch 12 focus=true']) {
+      expect((await chromeShellTool.execute({ script, dryRun: true })).isError, script).toBe(false);
+    }
+  });
+
   it('returns a fail-fast syntax error', async () => {
     const result = await chromeShellTool.execute({ script: 'inspect |', dryRun: true });
     expect(result.isError).toBe(true);

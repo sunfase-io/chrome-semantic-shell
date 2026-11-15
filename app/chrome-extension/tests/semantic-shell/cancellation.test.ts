@@ -11,6 +11,7 @@ describe('semantic action cancellation', () => {
       id: 99,
       status: 'loading',
     } as chrome.tabs.Tab);
+    vi.stubGlobal('chrome', { ...chrome, scripting: { executeScript: vi.fn().mockResolvedValue([{ result: 'loading' }]) } });
     const controller = new AbortController();
     const execution = openTabHandler.run(
       {
@@ -30,5 +31,6 @@ describe('semantic action cancellation', () => {
       }),
     );
     expect(remove).toHaveBeenCalledWith(99);
+    vi.unstubAllGlobals();
   });
 });

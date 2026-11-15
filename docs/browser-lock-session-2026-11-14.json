@@ -1,0 +1,14 @@
+{
+  "generated_utc": "2026-11-14T12:58:18.425Z",
+  "before": "locked",
+  "during": "locked",
+  "probe": {
+    "file": "browser-lock-probe-2026-11-14.json",
+    "exitCode": 0
+  },
+  "regression": {
+    "file": "browser-lock-regression-2026-11-14.json",
+    "exitCode": 0
+  },
+  "after": "locked"
+}

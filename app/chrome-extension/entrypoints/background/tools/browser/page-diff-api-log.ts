@@ -117,9 +117,16 @@ export function collectApiLog(tabId: number): { calls: ApiCall[]; dropped: numbe
   return { calls: log.calls, dropped: log.dropped };
 }
 
-/** True while an observed fetch/XHR has not completed yet. */
-export function hasPendingApiCalls(tabId: number): boolean {
-  return (logs.get(tabId)?.pending.size || 0) > 0;
+/**
+ * True while an observed fetch/XHR has not completed yet. With `youngerThanMs`, requests pending
+ * longer are long-lived connections (long polling, server-sent events) that never settle.
+ */
+export function hasPendingApiCalls(tabId: number, youngerThanMs = Infinity): boolean {
+  const pending = logs.get(tabId)?.pending;
+  if (!pending?.size) return false;
+  const since = Date.now() - youngerThanMs;
+  for (const call of pending.values()) if (call.startedAt >= since) return true;
+  return false;
 }
 
 export async function waitForApiIdle(

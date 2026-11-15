@@ -52,6 +52,9 @@ if (typeof globalThis.chrome === 'undefined') {
       onDOMContentLoaded: { addListener: vi.fn(), removeListener: vi.fn() },
       onCompleted: { addListener: vi.fn(), removeListener: vi.fn() },
     },
+    idle: {
+      queryState: vi.fn().mockResolvedValue('active'),
+    },
     debugger: {
       onEvent: { addListener: vi.fn(), removeListener: vi.fn() },
       onDetach: { addListener: vi.fn(), removeListener: vi.fn() },

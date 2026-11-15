@@ -1,13 +1,14 @@
 import { handleCallTool } from '@/entrypoints/background/tools';
 import { TOOL_NAMES } from 'chrome-semantic-shell-shared';
 
-export async function waitForNetworkIdle(totalTimeoutMs: number, idleThresholdMs: number) {
+export async function waitForNetworkIdle(tabId: number, totalTimeoutMs: number, idleThresholdMs: number) {
   const deadline = Date.now() + Math.max(500, totalTimeoutMs);
   const threshold = Math.max(200, idleThresholdMs);
   while (Date.now() < deadline) {
     await handleCallTool({
       name: TOOL_NAMES.BROWSER.NETWORK_CAPTURE_START,
       args: {
+        tabId,
         includeStatic: false,
         maxCaptureTime: Math.min(60_000, Math.max(threshold + 500, 2_000)),
         inactivityTimeout: 0,
@@ -36,10 +37,7 @@ export async function waitForNetworkIdle(totalTimeoutMs: number, idleThresholdMs
   throw new Error('wait for network idle timed out');
 }
 
-export async function waitForNavigation(timeoutMs = 15_000, previousUrl?: string): Promise<void> {
-  const [active] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (typeof active?.id !== 'number') throw new Error('Active tab not found');
-  const tabId = active.id;
+export async function waitForNavigation(tabId: number, timeoutMs = 15_000, previousUrl?: string): Promise<void> {
   const timeout = Math.max(1_000, Math.min(timeoutMs, 30_000));
 
   await new Promise<void>((resolve, reject) => {
@@ -80,23 +78,36 @@ export async function waitForNavigation(timeoutMs = 15_000, previousUrl?: string
   });
 }
 
-export async function waitForNavigationDone(previousUrl: string, timeoutMs?: number) {
-  await waitForNavigation(timeoutMs, previousUrl);
+export async function waitForNavigationDone(tabId: number, previousUrl: string, timeoutMs?: number) {
+  await waitForNavigation(tabId, timeoutMs, previousUrl);
 }
 
-export async function ensureReadPageIfWeb() {
-  const [active] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (/^(https?:|file:)/i.test(active?.url || '')) {
-    await handleCallTool({ name: TOOL_NAMES.BROWSER.READ_PAGE, args: {} });
+export async function ensureReadPageIfWeb(tabId: number) {
+  const tab = await chrome.tabs.get(tabId);
+  if (/^(https?:|file:)/i.test(tab.url || '')) {
+    await handleCallTool({ name: TOOL_NAMES.BROWSER.READ_PAGE, args: { tabId } });
   }
 }
 
-export async function maybeQuickWaitForNav(previousUrl: string, timeoutMs?: number) {
-  const [active] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (typeof active?.id !== 'number') return;
+export async function maybeQuickWaitForNav(tabId: number, previousUrl: string, timeoutMs?: number) {
   await new Promise((resolve) => setTimeout(resolve, 350));
-  const current = await chrome.tabs.get(active.id);
+  const current = await chrome.tabs.get(tabId);
   if (current.status === 'loading' || (current.url && current.url !== previousUrl)) {
-    await waitForNavigation(Math.min(timeoutMs || 15_000, 30_000), previousUrl).catch(() => {});
+    await waitForNavigation(tabId, Math.min(timeoutMs || 15_000, 30_000), previousUrl).catch(() => {});
   }
+}
+
+/**
+ * Whether the tab's committed document can be read and acted on: parsed, though images, iframes and
+ * long-polling requests may still be loading. A pending navigation still shows the old document.
+ */
+export async function isDocumentReady(tabId: number): Promise<boolean> {
+  const tab = await chrome.tabs.get(tabId);
+  if (tab.status === 'complete') return true;
+  if (tab.pendingUrl) return false;
+  // A document that is not committed yet cannot be scripted; that only means "not ready".
+  const probe = await chrome.scripting
+    .executeScript({ target: { tabId }, func: () => document.readyState })
+    .catch(() => []);
+  return probe[0]?.result === 'interactive' || probe[0]?.result === 'complete';
 }

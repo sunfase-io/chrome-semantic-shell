@@ -11,7 +11,6 @@ type ConsoleMode = 'snapshot' | 'buffer';
 interface ConsoleToolParams {
   url?: string;
   tabId?: number;
-  background?: boolean;
   windowId?: number;
   includeExceptions?: boolean;
   maxMessages?: number;
@@ -147,7 +146,6 @@ class ConsoleTool extends BaseBrowserToolExecutor {
       url,
       tabId,
       windowId,
-      background = false,
       includeExceptions = true,
       maxMessages = DEFAULT_MAX_MESSAGES,
       mode = 'snapshot',
@@ -179,7 +177,7 @@ class ConsoleTool extends BaseBrowserToolExecutor {
         targetTab = t;
       } else if (url) {
         // Navigate to the specified URL
-        targetTab = await this.navigateToUrl(url, background === true, windowId);
+        targetTab = await this.navigateToUrl(url, windowId);
       } else {
         // Use current active tab
         const [activeTab] =
@@ -308,25 +306,15 @@ class ConsoleTool extends BaseBrowserToolExecutor {
     }
   }
 
-  private async navigateToUrl(
-    url: string,
-    background = false,
-    windowId?: number,
-  ): Promise<chrome.tabs.Tab> {
+  private async navigateToUrl(url: string, windowId?: number): Promise<chrome.tabs.Tab> {
     // Check if URL is already open
     const existingTabs = await chrome.tabs.query({ url });
 
     if (existingTabs.length > 0 && existingTabs[0]?.id) {
-      const tab = existingTabs[0];
-      if (!background) {
-        // Activate the existing tab
-        await chrome.tabs.update(tab.id!, { active: true });
-        await chrome.windows.update(tab.windowId, { focused: true });
-      }
-      return tab;
+      return existingTabs[0];
     } else {
       // Create new tab with the URL
-      const createInfo: chrome.tabs.CreateProperties = { url, active: background ? false : true };
+      const createInfo: chrome.tabs.CreateProperties = { url, active: false };
       if (typeof windowId === 'number') createInfo.windowId = windowId;
       const newTab = await chrome.tabs.create(createInfo);
       // Wait for tab to be ready

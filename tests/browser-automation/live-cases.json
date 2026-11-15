@@ -295,5 +295,84 @@
     "program": "call fixture_slow input={} timeout=300",
     "expectError": true,
     "oracle": "window.count === 0"
+  },
+  {
+    "id": "wait-idle-gone",
+    "setup": "js code=\"document.getElementById('status').textContent = 'Loading'; return true\"",
+    "program": "query role=button name=\"Delayed result\" | click && wait gone=\"Loading\" timeout=3000 && wait idle timeout=5000 && assert text=\"Async ready\"",
+    "oracle": "document.querySelector('#status').textContent === 'Async ready'"
+  },
+  {
+    "id": "element-fixed-row",
+    "page": "/element",
+    "ready": ".el-table__fixed-right",
+    "program": "query role=row query=\"HDFK001\" | query role=checkbox scope=pipe | click && query role=row query=\"HDFK001\" | query role=button name=\"更多\" scope=pipe | click && query role=menuitem name=\"反审批\" | click && query role=dialog name=\"反审批\" | query role=button name=\"确定\" scope=pipe | click && wait text=\"reversed HDFK001\" timeout=3000",
+    "oracle": "state.selected.join() === 'HDFK001' && state.log.at(-1) === 'reversed HDFK001'"
+  },
+  {
+    "id": "element-message-box",
+    "page": "/element",
+    "ready": ".el-table__fixed-right",
+    "program": "query role=row query=\"HDFK002\" | query role=checkbox scope=pipe | click && query role=button name=\"同步接口\" | click && query role=dialog name=\"同步接口\" | query role=button name=\"确定\" scope=pipe | click && query role=dialog name=\"同步结果\" | query role=button name=\"确定\" scope=pipe | click && wait text=\"synced HDFK002\" timeout=3000",
+    "oracle": "state.log.at(-1) === 'synced HDFK002'"
+  },
+  {
+    "id": "element-select",
+    "page": "/element",
+    "ready": ".el-table__fixed-right",
+    "program": "select name=\"付款类型\" value=\"原料采购\" && select name=\"供应商\" value=\"南昌晨宇科技发展有限公司\" && check name=\"记住选择\" && query role=radio name=\"强制执行支出上限\" | click",
+    "oracle": "kind.value === '原料采购' && supplier.value === '南昌晨宇科技发展有限公司' && remember.checked && cap.checked"
+  },
+  {
+    "id": "element-select-miss",
+    "page": "/element",
+    "ready": ".el-table__fixed-right",
+    "program": "select name=\"付款类型\" value=\"预付款\"",
+    "expectError": true,
+    "errorContains": "it shows 2 option(s): 物资采购, 原料采购",
+    "errorExcludes": "首页",
+    "oracle": "kind.value === ''"
+  },
+  {
+    "id": "css-hidden-miss",
+    "page": "/element",
+    "ready": ".el-table__fixed-right",
+    "program": "query css=\".el-table__body-wrapper .is-hidden .el-dropdown-link\"",
+    "expectError": true,
+    "errorContains": "3 hidden",
+    "oracle": "!document.querySelector('.el-popper')"
+  },
+  {
+    "id": "ref-after-rerender",
+    "page": "/element",
+    "ready": ".el-table__fixed-right",
+    "refs": {
+      "NEXT": {
+        "role": "button",
+        "name": "下一步"
+      }
+    },
+    "setupAfterRefs": "query role=button name=\"刷新表单\" | click",
+    "program": "click {{NEXT}}",
+    "outputContains": "was re-rendered",
+    "oracle": "state.next === 1"
+  },
+  {
+    "id": "ref-other-frame",
+    "refs": {
+      "COUNT": {
+        "role": "button",
+        "name": "Count"
+      }
+    },
+    "setupAfterRefs": "click css=\"#double\"",
+    "program": "click {{COUNT}}",
+    "oracle": "window.count === 1"
+  },
+  {
+    "id": "js-last-expression",
+    "program": "js code=\"const a = 6; a * 7\"",
+    "outputContains": "\"value\": 42",
+    "oracle": "window.count === 0"
   }
 ]

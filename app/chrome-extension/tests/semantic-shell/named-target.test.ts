@@ -4,18 +4,24 @@ import { parseShellProgram } from '@/entrypoints/background/tools/browser/semant
 import * as state from '@/entrypoints/background/tools/browser/semantic-state';
 import * as observation from '@/entrypoints/background/tools/browser/page-diff';
 import * as actions from '@/entrypoints/background/semantic-actions';
+import { ForegroundScope } from '@/entrypoints/background/tools/browser/background-session';
 
 describe('session regression: direct role/name actions', () => {
   beforeEach(() => vi.stubGlobal('chrome', {
     ...chrome,
-    tabs: { ...chrome.tabs, sendMessage: vi.fn().mockResolvedValue({ status: 'pong' }) },
+    tabs: {
+      ...chrome.tabs,
+      sendMessage: vi.fn().mockResolvedValue({ status: 'pong' }),
+      get: vi.fn().mockResolvedValue({ id: 91, active: true, windowId: 1 }),
+    },
+    windows: { get: vi.fn().mockResolvedValue({ state: 'normal', focused: true }) },
   }));
   afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
   const runtime = () => ({
     tabId: 91, vars: { value: 'example' }, pipelineNodes: [], records: [], lines: [], logs: [],
     artifacts: [], workspaceTools: [], actionCounter: 0, lastSuccess: true,
-    deferredPrograms: [], observationDeltas: [], learningResults: [], toolDepth: 0,
+    deferredPrograms: [], observationDeltas: [], learningResults: [], toolDepth: 0, foreground: new ForegroundScope(), warnings: [],
   });
 
   it('resolves a native labelled textbox through the semantic layer before fill', async () => {

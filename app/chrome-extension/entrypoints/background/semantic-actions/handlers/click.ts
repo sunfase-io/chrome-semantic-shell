@@ -137,14 +137,14 @@ async function executeClick<T extends 'click' | 'dblclick'>(
   const after = action.params.after ?? {};
 
   if (after.waitForNavigation) {
-    await waitForNavigationDone(beforeUrl, waitMs);
+    await waitForNavigationDone(tabId, beforeUrl, waitMs);
   } else if (after.waitForNetworkIdle) {
     const totalMs = clampInt(waitMs, 1000, ENGINE_CONSTANTS.MAX_WAIT_MS);
     const idleMs = Math.min(1500, Math.max(500, Math.floor(totalMs / 3)));
-    await waitForNetworkIdle(totalMs, idleMs);
+    await waitForNetworkIdle(tabId, totalMs, idleMs);
   } else {
     // Quick sniff for navigation that might have been triggered
-    await maybeQuickWaitForNav(beforeUrl, waitMs);
+    await maybeQuickWaitForNav(tabId, beforeUrl, waitMs);
   }
 
   return { status: 'success' };

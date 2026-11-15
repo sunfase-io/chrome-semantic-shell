@@ -20,7 +20,9 @@ spec = importlib.util.spec_from_file_location('flow', ROOT/'skills/chrome-shell/
 flow = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(flow)
 SPECIAL_CASES = {'navigation', 'tabs', 'wrong-tab', 'stale-page', 'download', 'browser-dialog', 'learn-replay', 'jev-flow',
-                 'navigate-error', 'fail-fast-file'}
+                 'navigate-error', 'fail-fast-file', 'inspect-since'}
+# Every case runs on a background tab while the user keeps working: none may change which tab is shown or
+# which window has the focus. Only `tab switch` may, and the case that tests it restores the user's tab.
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -36,6 +38,8 @@ class Handler(BaseHTTPRequestHandler):
             data, kind = b'plain api answer', 'text/plain; charset=utf-8'
         elif self.path == '/download':
             data, kind = b'chrome-shell synthetic download', 'text/plain'
+        elif self.path == '/element':
+            data, kind = (HERE/'element.html').read_bytes(), 'text/html; charset=utf-8'
         else:
             data, kind = (HERE/'fixture.html').read_bytes(), 'text/html; charset=utf-8'
         self.send_response(200)
@@ -56,6 +60,16 @@ class Handler(BaseHTTPRequestHandler):
 
     def log_message(self, *args):
         pass
+
+
+def foreground(browser):
+    """The tab shown in each window and whether that window has the focus."""
+    tab = browser.defaults.pop('tabId', None)  # the case tab may already be closed
+    try:
+        listing = browser.run('window')['steps'][0]['value']
+    finally:
+        if tab is not None: browser.defaults['tabId'] = tab
+    return {w['windowId']: (w['focused'], next((t['tabId'] for t in w['tabs'] if t['active']), None)) for w in listing['windows']}
 
 
 def probe(browser, expression):
@@ -89,12 +103,18 @@ def run_special(case, browser, origin, workspace, endpoint, all_cases):
         browser.run('forward && wait navigation timeout=3000 && reload && wait navigation timeout=3000')
         probe(browser, "location.pathname === '/third'")
     elif case == 'tabs':
+        shown = foreground(browser)
         child = browser.run(f'tab new {origin}/child')['tabId']
+        window = None
         try:
             browser.run(f'tab list && tab switch {tab}')
             probe(browser, "location.pathname === '/'")
+            after = foreground(browser)
+            window = next(w for w, (_, active) in after.items() if active == tab)
+            assert after[window][0] == shown[window][0], 'tab switch raised the window without focus=true'
         finally:
             browser.run(f'tab close {child}')
+            if window is not None: browser.run(f'tab switch {shown[window][1]}')
     elif case == 'wrong-tab':
         other = flow.Chrome(2147483000, workspace, 3000, endpoint)
         try:
@@ -110,7 +130,6 @@ def run_special(case, browser, origin, workspace, endpoint, all_cases):
         if not any(Handler.download_name in (s.get('detail') or '') for s in result['steps']):
             raise AssertionError('Download receipt does not identify the owned fixture file')
     elif case == 'browser-dialog':
-        browser.run(f'tab switch {tab}')
         opener = flow.Chrome(tab, workspace, 5000, endpoint)
         try:
             with ThreadPoolExecutor(max_workers=1) as pool:
@@ -154,6 +173,13 @@ def run_special(case, browser, origin, workspace, endpoint, all_cases):
         expect_failure(browser, 'navigate http://127.0.0.1:1/')
         browser.run(f'navigate {origin}/ && wait selector="#save" timeout=3000')
         probe(browser, "location.pathname === '/'")
+    elif case == 'inspect-since':
+        # A later call sees only what changed since an earlier inspect of the same view.
+        version = browser.run('inspect forms')['state']['version']
+        browser.run('fill css="#name" value="since-check"')
+        detail = browser.run(f'inspect forms since=v{version}')['steps'][0]['detail']
+        assert detail.startswith(f'delta v{version}->') and 'since-check' in detail and 'Category' not in detail, detail
+        expect_failure(browser, f'inspect interactive since=v{version}')
     elif case == 'fail-fast-file':
         browser.defaults['failFast'] = True
         try:
@@ -214,13 +240,14 @@ def main():
             Handler.saved = None; Handler.requests = []
             try:
                 browser.run('tab list')  # Read-only protocol handshake before allocating a tab.
-                tab = browser.run(f'tab new {origin}/')['tabId']
+                shown = foreground(browser)
+                case = by_id.get(cid, {})
+                tab = browser.run(f'tab new {origin}{case.get("page", "/")}')['tabId']
                 browser.defaults['tabId'] = tab
-                browser.run('wait selector="#save" timeout=3000')
+                browser.run(f'wait selector="{case.get("ready", "#save")}" timeout=3000')
                 if cid in SPECIAL_CASES:
                     run_special(cid, browser, origin, workspace, args.endpoint, by_id)
                 else:
-                    case = by_id[cid]
                     if case.get('setup'): browser.run(case['setup'])
                     program = case['program']
                     if case.get('refs'):
@@ -235,6 +262,9 @@ def main():
                     if case.get('expectError'):
                         expect_failure(browser, program, variables=values)
                         receipt = None
+                        failure = ''.join(c.get('text', '') for c in browser.last_response['content'])
+                        if case.get('errorContains'): assert case['errorContains'] in failure, failure
+                        if case.get('errorExcludes'): assert case['errorExcludes'] not in failure, failure
                     else:
                         receipt = browser.run(program, variables=values)
                     if case.get('image'):
@@ -268,6 +298,8 @@ def main():
                 if tab is not None:
                     try: browser.run(f'tab close {tab}')
                     except Exception as error: results.append({'id':cid+':cleanup','status':'failed','error':str(error)})
+                    if result['status'] == 'passed' and foreground(browser) != shown:
+                        result = {'id':cid,'status':'failed','error':'FOCUS_CHANGED: the case changed the shown tab or the focused window'}
                 browser.close()
             results.append(result)
             print(json.dumps({k:v for k,v in result.items() if k!='receipt'}, ensure_ascii=False), flush=True)

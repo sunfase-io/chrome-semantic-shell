@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   diffSemanticStates,
   inspectSemanticPage,
@@ -29,16 +29,28 @@ afterEach(() => {
 });
 
 describe('semantic page state', () => {
-  it('excludes the control value and option text from wrapping labels', () => {
+  it('waits for fades only in a visible page, whose timers Chrome does not delay', async () => {
+    const getAnimations = vi.fn(() => []);
+    (document as any).getAnimations = getAnimations;
+    for (const visibility of ['hidden', 'visible']) {
+      Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => visibility });
+      await inspectSemanticPage({ mode: 'interactive' });
+    }
+    delete (document as any).visibilityState;
+    delete (document as any).getAnimations;
+    expect(getAnimations).toHaveBeenCalledTimes(1);
+  });
+
+  it('excludes the control value and option text from wrapping labels', async () => {
     document.body.innerHTML = '<label>Category <select><option value="basic">Basic</option><option value="policy">Policy</option></select></label><label>Notes <textarea>Initial value</textarea></label><label>Name <input placeholder="Enter name"></label>';
     visibleTree();
-    const snapshot = inspectSemanticPage({ mode: 'interactive' });
+    const snapshot = await inspectSemanticPage({ mode: 'interactive' });
     expect(snapshot.nodes.find((node) => node.role === 'combobox')?.name).toBe('Category');
     expect(snapshot.nodes.find((node) => node.kind === 'textarea')?.name).toBe('Notes');
     expect(snapshot.nodes.find((node) => node.kind === 'input')?.name).toBe('Name');
     expect(snapshot.nodes.filter((node) => node.role === 'option').map((node) => node.name)).toEqual(['Basic', 'Policy']);
   });
-  it('keeps refs stable for the same DOM node and versions actual state changes', () => {
+  it('keeps refs stable for the same DOM node and versions actual state changes', async () => {
     document.body.innerHTML = `
       <form aria-label="创建网站">
         <label for="domain">域名</label>
@@ -47,14 +59,14 @@ describe('semantic page state', () => {
       </form>`;
     visibleTree();
 
-    const first = inspectSemanticPage({ mode: 'interactive' });
-    const second = inspectSemanticPage({ mode: 'interactive' });
+    const first = await inspectSemanticPage({ mode: 'interactive' });
+    const second = await inspectSemanticPage({ mode: 'interactive' });
     expect(second.version).toBe(first.version);
     expect(second.nodes.map((node) => node.ref)).toEqual(first.nodes.map((node) => node.ref));
 
     const input = document.querySelector<HTMLInputElement>('#domain')!;
     input.value = 'new.example.com';
-    const third = inspectSemanticPage({ mode: 'interactive' });
+    const third = await inspectSemanticPage({ mode: 'interactive' });
     expect(third.version).toBe(first.version + 1);
     const delta = diffSemanticStates(first, third);
     expect(delta.updated).toHaveLength(1);
@@ -62,38 +74,38 @@ describe('semantic page state', () => {
     expect(delta.updated[0].value).toBe('new.example.com');
   });
 
-  it('returns actionable refs for added nodes and reports removed refs', () => {
+  it('returns actionable refs for added nodes and reports removed refs', async () => {
     document.body.innerHTML = '<button id="a">A</button>';
     visibleTree();
-    const before = inspectSemanticPage({ mode: 'interactive' });
+    const before = await inspectSemanticPage({ mode: 'interactive' });
 
     const added = document.createElement('button');
     added.id = 'b';
     added.textContent = 'B';
     (added as any).getClientRects = () => [{ width: 10, height: 10 }];
     document.body.appendChild(added);
-    const afterAdd = inspectSemanticPage({ mode: 'interactive' });
+    const afterAdd = await inspectSemanticPage({ mode: 'interactive' });
     const addDelta = diffSemanticStates(before, afterAdd);
     expect(addDelta.added).toHaveLength(1);
     expect(addDelta.added[0].ref).toMatch(/^ref_\d+$/);
     expect(renderSemanticDelta(addDelta)).toContain(`+ ${addDelta.added[0].ref} button "B"`);
 
     document.querySelector('#a')!.remove();
-    const afterRemove = inspectSemanticPage({ mode: 'interactive' });
+    const afterRemove = await inspectSemanticPage({ mode: 'interactive' });
     const removeDelta = diffSemanticStates(afterAdd, afterRemove);
     expect(removeDelta.removed).toEqual([before.nodes[0].ref]);
   });
 
-  it('versions semantically identical DOM replacements and expires the old ref', () => {
+  it('versions semantically identical DOM replacements and expires the old ref', async () => {
     document.body.innerHTML = '<button id="save">Save</button>';
     visibleTree();
-    const before = inspectSemanticPage({ mode: 'interactive' });
+    const before = await inspectSemanticPage({ mode: 'interactive' });
     const oldRef = before.nodes[0].ref;
 
     const replacement = document.querySelector('button')!.cloneNode(true) as HTMLButtonElement;
     (replacement as any).getClientRects = () => [{ width: 10, height: 10 }];
     document.querySelector('button')!.replaceWith(replacement);
-    const after = inspectSemanticPage({ mode: 'interactive' });
+    const after = await inspectSemanticPage({ mode: 'interactive' });
     const delta = diffSemanticStates(before, after);
 
     expect(after.version).toBe(before.version + 1);
@@ -102,7 +114,7 @@ describe('semantic page state', () => {
     expect(delta.added[0].ref).toBe(after.nodes[0].ref);
   });
 
-  it('distinguishes equal refs that belong to different frames', () => {
+  it('distinguishes equal refs that belong to different frames', async () => {
     const before = {
       version: 1,
       url: 'https://a.test',
@@ -120,7 +132,7 @@ describe('semantic page state', () => {
     expect(delta.added[0].frameId).toBe(7);
   });
 
-  it('supports dialog scope, filtering and native select options', () => {
+  it('supports dialog scope, filtering and native select options', async () => {
     document.body.innerHTML = `
       <button>页面按钮</button>
       <div role="dialog" aria-label="选择协议">
@@ -128,13 +140,13 @@ describe('semantic page state', () => {
         <button>确定</button>
       </div>`;
     visibleTree();
-    const state = inspectSemanticPage({ mode: 'dialog', query: '协议' });
+    const state = await inspectSemanticPage({ mode: 'dialog', query: '协议' });
     expect(state.nodes.some((node) => node.role === 'combobox')).toBe(true);
     const select = state.nodes.find((node) => node.role === 'combobox')!;
     expect(select.options).toEqual(['http:HTTP', 'https:HTTPS']);
     expect(state.nodes.some((node) => node.name === '页面按钮')).toBe(false);
 
-    const optionState = inspectSemanticPage({ mode: 'interactive', query: 'HTTPS' });
+    const optionState = await inspectSemanticPage({ mode: 'interactive', query: 'HTTPS' });
     expect(optionState.nodes).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -146,7 +158,7 @@ describe('semantic page state', () => {
     );
   });
 
-  it('treats visible Element UI dropdown items as actionable options', () => {
+  it('treats visible Element UI dropdown items as actionable options', async () => {
     document.body.innerHTML = `
       <ul class="el-select-dropdown__list">
         <li class="el-select-dropdown__item">基础平台</li>
@@ -154,7 +166,7 @@ describe('semantic page state', () => {
       </ul>`;
     visibleTree();
 
-    const state = inspectSemanticPage({ mode: 'interactive', query: '加工事业部贸易' });
+    const state = await inspectSemanticPage({ mode: 'interactive', query: '加工事业部贸易' });
 
     expect(state.nodes).toEqual([
       expect.objectContaining({
@@ -165,7 +177,7 @@ describe('semantic page state', () => {
     ]);
   });
 
-  it('filters rows by their own content instead of the shared table context', () => {
+  it('filters rows by their own content instead of the shared table context', async () => {
     document.body.innerHTML = `
       <table>
         <tbody>
@@ -175,14 +187,14 @@ describe('semantic page state', () => {
       </table>`;
     visibleTree();
 
-    const state = inspectSemanticPage({ mode: 'tables', query: 'ROLE_001' });
+    const state = await inspectSemanticPage({ mode: 'tables', query: 'ROLE_001' });
 
     expect(state.nodes.filter((node) => node.role === 'row')).toEqual([
-      expect.objectContaining({ name: 'ROLE_001查看' }),
+      expect.objectContaining({ name: 'ROLE_001 查看' }),
     ]);
   });
 
-  it('keeps semantic versions independent of query mode and output limit', () => {
+  it('keeps semantic versions independent of query mode and output limit', async () => {
     document.body.innerHTML = `
       <main>
         <button>A</button>
@@ -191,9 +203,9 @@ describe('semantic page state', () => {
       </main>`;
     visibleTree();
 
-    const limited = inspectSemanticPage({ mode: 'interactive', limit: 1 });
-    const expanded = inspectSemanticPage({ mode: 'interactive', limit: 20 });
-    const queried = inspectSemanticPage({ mode: 'text', query: 'status' });
+    const limited = await inspectSemanticPage({ mode: 'interactive', limit: 1 });
+    const expanded = await inspectSemanticPage({ mode: 'interactive', limit: 20 });
+    const queried = await inspectSemanticPage({ mode: 'text', query: 'status' });
 
     expect(expanded.version).toBe(limited.version);
     expect(queried.version).toBe(limited.version);
@@ -201,69 +213,111 @@ describe('semantic page state', () => {
       expect.objectContaining({ added: [], updated: [], removed: [] }),
     );
   });
-  it('names nodes from rendered text only and normalizes invisible characters', () => {
+  it('names nodes from rendered text only and normalizes invisible characters', async () => {
     document.body.innerHTML = `
       <div tabindex="0">Picker<style>.picker{z-index:1}</style><script>var x = 1</script></div>
       <select><option>A</option><option>B</option></select>
       <button>发送 &#x202A;(Ctrl-Enter)&#x202C;</button>`;
     visibleTree();
-    const state = inspectSemanticPage({ mode: 'interactive' });
+    const state = await inspectSemanticPage({ mode: 'interactive' });
     const names = state.nodes.filter((node) => node.role !== 'option').map((node) => node.name);
     expect(names).toEqual(['Picker', undefined, '发送 (Ctrl-Enter)']);
   });
 
-  it('filters role and name before applying the limit', () => {
+  it('filters role and name before applying the limit', async () => {
     document.body.innerHTML = `${'<button>菜单</button>'.repeat(30)}<button>导出账单CSV</button>`;
     visibleTree();
-    const state = inspectSemanticPage({ mode: 'interactive', role: 'button', name: '导出账单CSV', limit: 5 });
+    const state = await inspectSemanticPage({ mode: 'interactive', role: 'button', name: '导出账单CSV', limit: 5 });
     expect(state.nodes.map((node) => node.name)).toEqual(['导出账单CSV']);
-    const contains = inspectSemanticPage({ mode: 'interactive', nameContains: '账单', limit: 5 });
+    const contains = await inspectSemanticPage({ mode: 'interactive', nameContains: '账单', limit: 5 });
     expect(contains.nodes).toHaveLength(1);
   });
 
-  it('excludes content under an aria-hidden ancestor and selects dialogs by role', () => {
+  it('excludes content under an aria-hidden ancestor and selects dialogs by role', async () => {
     document.body.innerHTML = `
       <div aria-hidden="true"><button>隐藏</button></div>
       <div role="dialog" aria-label="确认提示"><button>好的</button></div>`;
     visibleTree();
-    expect(inspectSemanticPage({ mode: 'interactive' }).nodes.map((node) => node.name)).toEqual(['好的']);
-    const dialogs = inspectSemanticPage({ mode: 'interactive', role: 'dialog' });
+    expect((await inspectSemanticPage({ mode: 'interactive' })).nodes.map((node) => node.name)).toEqual(['好的']);
+    const dialogs = await inspectSemanticPage({ mode: 'interactive', role: 'dialog' });
     expect(dialogs.nodes.map((node) => node.name)).toEqual(['确认提示']);
   });
 
-  it('picks the dialog named by the query instead of the first visible one', () => {
+  it('picks the dialog named by the query instead of the first visible one', async () => {
     document.body.innerHTML = `
       <div role="dialog" aria-label="产品面板"><button>展开</button></div>
       <div role="dialog" aria-label="导出账单CSV"><button>确定导出</button></div>`;
     visibleTree();
-    const state = inspectSemanticPage({ mode: 'dialog', query: '导出账单CSV' });
+    const state = await inspectSemanticPage({ mode: 'dialog', query: '导出账单CSV' });
     expect(state.nodes.map((node) => node.name)).toContain('确定导出');
     expect(state.nodes.map((node) => node.name)).not.toContain('展开');
   });
 
-  it('reports text blocks once instead of repeating every ancestor', () => {
+  it('reports text blocks once instead of repeating every ancestor', async () => {
     document.body.innerHTML = `<main><article><p>第一段 <b>加粗</b></p><p>第二段</p></article></main>`;
     visibleTree();
-    const names = inspectSemanticPage({ mode: 'text' }).nodes.map((node) => node.name);
+    const names = (await inspectSemanticPage({ mode: 'text' })).nodes.map((node) => node.name);
     expect(names).toEqual(['第一段 加粗', '第二段']);
   });
 
-  it('treats scripted anchors and pointer cards as clickable', () => {
+  it('treats scripted anchors and pointer cards as clickable', async () => {
     document.body.innerHTML = `
       <a onclick="void 0">下载</a>
       <div style="cursor:pointer"><span>SSH服务器</span></div>`;
     visibleTree();
-    const state = inspectSemanticPage({ mode: 'interactive' });
+    const state = await inspectSemanticPage({ mode: 'interactive' });
     expect(state.nodes.map((node) => [node.role, node.name])).toEqual([
       ['link', '下载'],
       ['generic', 'SSH服务器'],
     ]);
   });
 
-  it('returns a scope error marker instead of throwing inside the page', () => {
+  it('lists a styled checkbox by the label that stands in for its hidden native input', async () => {
+    document.body.innerHTML = `
+      <label class="el-checkbox"><span class="el-checkbox__inner"></span><input type="checkbox" checked style="opacity:0">记住选择</label>
+      <input type="radio" id="cap" style="opacity:0"><label for="cap">强制执行支出上限</label>
+      <input placeholder="供应商">`;
+    visibleTree();
+    const state = await inspectSemanticPage({ mode: 'interactive' });
+    expect(state.nodes.map((node) => [node.kind, node.role, node.name, node.states?.checked])).toEqual([
+      ['label', 'checkbox', '记住选择', true],
+      ['label', 'radio', '强制执行支出上限', false],
+      ['input', 'textbox', '供应商', undefined],
+    ]);
+    const bySelector = await inspectSemanticPage({ mode: 'interactive', selector: 'input[type=checkbox]' });
+    expect(bySelector.nodes.map((node) => node.name)).toEqual(['记住选择']);
+  });
+
+  it('assigns the controls of fixed-column overlays to the main row at the same height', async () => {
+    const row = (code: string, fixed: boolean) =>
+      `<tr><td>${fixed ? '' : code}</td><td>${fixed ? '<button>查看</button>' : ''}</td></tr>`;
+    document.body.innerHTML = `
+      <div class="el-table">
+        <table class="main"><thead><tr><th>单号</th><th>操作</th></tr></thead><tbody>${row('HDFK001', false)}${row('HDFK002', false)}</tbody></table>
+        <div class="el-table__fixed-right"><table><tbody>${row('HDFK001', true)}${row('HDFK002', true)}</tbody></table></div>
+      </div>
+      <ul><li class="el-dropdown-menu__item" tabindex="-1">反审批</li></ul>`;
+    visibleTree();
+    document.querySelectorAll('tbody').forEach((body) =>
+      Array.from(body.rows).forEach((tr, index) => {
+        tr.getBoundingClientRect = () => ({ top: 40 + 32 * index }) as DOMRect;
+      }),
+    );
+    const state = await inspectSemanticPage({ mode: 'tables' });
+    const rows = state.nodes.filter((node) => node.role === 'row' && node.name?.startsWith('HDFK'));
+    expect(rows.map((node) => node.name)).toEqual(['HDFK001', 'HDFK002']);
+    expect(state.nodes.filter((node) => node.role === 'table').map((node) => node.name)).toEqual(['单号 操作']);
+    const buttons = state.nodes.filter((node) => node.role === 'button');
+    expect(buttons.map((node) => node.context)).toEqual(['row:HDFK001', 'row:HDFK002']);
+    const scoped = await inspectSemanticPage({ mode: 'interactive', scopeRef: rows[1].ref, role: 'button' });
+    expect(scoped.nodes.map((node) => node.ref)).toEqual([buttons[1].ref]);
+    expect(state.nodes.find((node) => node.name === '反审批')?.role).toBe('menuitem');
+  });
+
+  it('returns a scope error marker instead of throwing inside the page', async () => {
     document.body.innerHTML = '<button>x</button>';
     visibleTree();
-    const state = inspectSemanticPage({ scopeRef: 'ref_999' });
+    const state = await inspectSemanticPage({ scopeRef: 'ref_999' });
     expect(state.capabilities[0]).toMatch(/^semantic-error:scope ref "ref_999"/);
   });
 });

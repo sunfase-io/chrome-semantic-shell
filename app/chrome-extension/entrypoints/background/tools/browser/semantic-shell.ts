@@ -6,8 +6,10 @@ import {
   type SemanticNode,
   type SemanticPageState,
 } from 'chrome-semantic-shell-shared';
+import { isDocumentReady } from '@/entrypoints/background/semantic-actions/runtime/wait';
+import { ForegroundScope } from './background-session';
 import { beginObservation, collectObservation } from './page-diff';
-import { waitForApiIdle } from './page-diff-api-log';
+import { hasPendingApiCalls, waitForApiIdle } from './page-diff-api-log';
 import {
   parseShellProgram,
   validateShellProgram,
@@ -36,6 +38,7 @@ interface StepRecord {
   detail?: string;
   /** Decoded result of js/tool/http steps; `detail` keeps the raw text for existing consumers. */
   value?: unknown;
+  warnings?: string[];
   durationMs: number;
 }
 
@@ -73,7 +76,45 @@ interface RuntimeState {
   startUrl?: string;
   /** Last filled/typed element: the default target of a following `key`. */
   lastInput?: { ref: string; frameId?: number };
+  /** Tabs the user is not looking at, kept rendering for this program. */
+  foreground: ForegroundScope;
+  /** Warnings raised while the current command runs; its step record carries them. */
+  warnings: string[];
 }
+
+/** Failures that waited for something: their cause is usually the tab's state, so they get a diagnosis. */
+const WAITED_IN_VAIN = /timed out after \d+ms|within \d+ms/;
+
+/** The usual causes of a wait in vain, checked rather than guessed. */
+async function diagnoseTab(tabId: number): Promise<string> {
+  const tab = (await chrome.tabs.get(tabId).catch(() => undefined)) as (chrome.tabs.Tab & { frozen?: boolean }) | undefined;
+  if (!tab) return `tab ${tabId} is gone`;
+  const facts = [`tab ${tabId} ${tab.status || 'status unknown'}`];
+  if (tab.discarded) facts.push('discarded by Chrome to save memory');
+  if (tab.frozen) facts.push('frozen by Chrome');
+  if (!tab.active) facts.push('background tab');
+  const window = await chrome.windows.get(tab.windowId).catch(() => undefined);
+  if (window?.state === 'minimized') facts.push('window minimized');
+  if ((await chrome.idle.queryState(15)) === 'locked') facts.push('screen locked');
+  // An open alert/confirm blocks the page's main thread, and with it every script and wait.
+  const page = await Promise.race([
+    chrome.scripting
+      .executeScript({ target: { tabId }, func: () => document.visibilityState })
+      .then((results) => `page ${results[0]?.result ?? 'gave no answer'}`, (error) => `page not scriptable: ${error instanceof Error ? error.message : error}`),
+    new Promise<string>((resolve) =>
+      setTimeout(() => resolve('page main thread not responding; an open alert/confirm dialog blocks it: dialog accept|dismiss'), 500),
+    ),
+  ]);
+  return [...facts, page].join(', ');
+}
+
+/** A select's open list unchanged this long does not hold the value being picked. */
+const SETTLED_LIST_MS = 1_000;
+
+/** How long DOM and network must stay unchanged for `wait idle`. */
+const IDLE_QUIET_MS = 500;
+/** A request pending longer is a long-lived connection (long polling, SSE), not page loading. */
+const LONG_LIVED_REQUEST_MS = 5_000;
 
 /** Per deferred cleanup block; cleanups run even after the program deadline. */
 const DEFER_BUDGET_MS = 10_000;
@@ -144,7 +185,28 @@ const MUTATING_COMMANDS = new Set([
   'upload',
 ]);
 
+/**
+ * Commands whose result depends on a rendering page: animation frames, transitions, unthrottled
+ * timers, layout or input. On a tab the user is not looking at they run inside a background session.
+ * Network, storage and tab bookkeeping work on a hidden page as is and never show the debugging bar.
+ */
+const LIVE_PAGE_COMMANDS = new Set([
+  'inspect', 'query', 'diff', 'watch', 'click', 'dblclick', 'select', 'fill', 'type', 'check', 'fillform', 'key',
+  'navigate', 'back', 'forward', 'reload', 'wait', 'assert', 'scroll', 'hover', 'drag', 'upload', 'screenshot',
+  'js', 'extract', 'call',
+]);
+
 const INSPECT_MODES = new Set(['interactive', 'forms', 'tables', 'dialog', 'text', 'full']);
+
+/** Recent inspect results per tab and view: the baselines of `inspect since=vN` in a later program. */
+const inspectBaselines = new Map<number, Array<{ view: string; state: SemanticPageState }>>();
+const BASELINES_PER_TAB = 4;
+
+function rememberInspect(tabId: number, view: string, state: SemanticPageState): void {
+  if (!inspectBaselines.size) chrome.tabs.onRemoved.addListener((removed) => inspectBaselines.delete(removed));
+  const kept = (inspectBaselines.get(tabId) || []).filter((entry) => entry.view !== view || entry.state.version !== state.version);
+  inspectBaselines.set(tabId, [...kept, { view, state }].slice(-BASELINES_PER_TAB));
+}
 const TABLE_SEMANTIC_ROLES = new Set(['table', 'row', 'columnheader', 'cell']);
 
 export function validateSemanticToolInput(schema: any, input: unknown): Record<string, unknown> {
@@ -379,8 +441,8 @@ export function javascriptStepOutcome(text: string): {
   if (payload.truncated) {
     warnings.push('result truncated; return less data, raise max=<bytes>, or page through it');
   }
-  if (raw.undefinedResult && !raw.expression) {
-    warnings.push('code returned undefined; statement code needs an explicit return');
+  if (raw.undefinedResult && (raw.returns === 'none' || raw.returns === 'unknown')) {
+    warnings.push('code returned undefined; end it with an expression or return the value explicitly');
   }
   return { value: payload.value, line: renderResultValue(payload.value), warnings };
 }
@@ -555,20 +617,123 @@ async function pinCssTarget(tabId: number, frameId: number, css: string): Promis
 }
 
 /** Frame owning a live ref; refs are numbered per frame, so a ref found in several frames is ambiguous. */
-async function locateRefFrame(tabId: number, ref: string): Promise<number | undefined> {
-  const results = await chrome.scripting
-    .executeScript({
-      target: { tabId, allFrames: true },
-      world: 'ISOLATED',
-      func: (value: string) => Boolean((window as any).__chromeShellElementMap?.[value]?.deref?.()),
-      args: [ref],
-    })
-    .catch(() => []);
-  const owners = results.filter((result) => result.result === true).map((result) => result.frameId || 0);
-  if (owners.length > 1) {
-    throw new Error(`${ref} exists in frames ${owners.join(', ')}; add frame=<id> from the inspect output`);
+/** Whether the ref's input takes typed text right now (not read-only or disabled). */
+async function acceptsText(tabId: number, ref: string, frameId = 0): Promise<boolean> {
+  const [frame] = await chrome.scripting.executeScript({
+    target: { tabId, frameIds: [frameId] },
+    world: 'ISOLATED',
+    func: (value: string) => {
+      const el = (window as any).__chromeShellElementMap?.[value]?.deref?.();
+      return el instanceof HTMLInputElement && !el.readOnly && !el.disabled;
+    },
+    args: [ref],
+  });
+  return frame?.result === true;
+}
+
+/** Why a css= query found no node although the selector may match: hidden elements, or plain markup. */
+async function explainCssMiss(tabId: number, selector: string, frameId?: number): Promise<string> {
+  const frames = await chrome.scripting.executeScript({
+    target: frameId === undefined ? { tabId, allFrames: true } : { tabId, frameIds: [frameId] },
+    world: 'ISOLATED',
+    func: (css: string) => {
+      const matched = Array.from(document.querySelectorAll(css));
+      const hidden = matched.filter((el) => {
+        const style = getComputedStyle(el);
+        const box = el.getBoundingClientRect();
+        return style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0' || !box.width || !box.height;
+      }).length;
+      return [matched.length, hidden];
+    },
+    args: [selector],
+  });
+  const [total, hidden] = frames.reduce(([t, h], frame) => {
+    const [count, invisible] = (frame.result as number[] | undefined) || [0, 0];
+    return [t + count, h + invisible];
+  }, [0, 0]);
+  if (!total) return '; the selector matches no element';
+  const plain = total - hidden;
+  return `; the selector matches ${total} element(s), none a visible semantic node: ${[
+    hidden && `${hidden} hidden (display none, visibility hidden, opacity 0 or no size; a styled checkbox shows its label instead)`,
+    plain && `${plain} neither interactive nor named`,
+  ].filter(Boolean).join(', ')}`;
+}
+
+/** Page side: 'live' while the ref's element is in the document, 'gone' once a listed ref lost it. */
+function refStateInPage(ref: string): 'live' | 'gone' | undefined {
+  const w = window as any;
+  if (w.__chromeShellElementMap?.[ref]?.deref?.()?.isConnected) return 'live';
+  return w.__chromeShellRefInfo?.has(ref) ? 'gone' : undefined;
+}
+
+/** The frame that owns a ref; a ref that lost its element names the frame that listed it. */
+async function locateRefFrame(tabId: number, ref: string): Promise<{ live: boolean; frameId?: number }> {
+  const results = await chrome.scripting.executeScript({
+    target: { tabId, allFrames: true },
+    world: 'ISOLATED',
+    func: refStateInPage,
+    args: [ref],
+  });
+  const owners = (state: string) => results.filter((result) => result.result === state).map((result) => result.frameId || 0);
+  const live = owners('live');
+  if (live.length > 1) {
+    throw new Error(`${ref} exists in frames ${live.join(', ')}; add frame=<id> from the inspect output`);
   }
-  return owners[0];
+  if (live.length) return { live: true, frameId: live[0] };
+  const gone = owners('gone');
+  return { live: false, frameId: gone.length === 1 ? gone[0] : undefined };
+}
+
+/** A ref and the frame that owns it; a re-rendered ref is replaced by its unique successor, with a warning. */
+async function ownedRef(
+  runtime: RuntimeState,
+  ref: string,
+  frameId?: number,
+): Promise<{ ref: string; frameId: number }> {
+  const owner = frameId === undefined ? await locateRefFrame(runtime.tabId, ref) : { live: false, frameId };
+  if (owner.live) return { ref, frameId: owner.frameId! };
+  const found = await relocateRef(runtime.tabId, ref, owner.frameId);
+  const name = found.name ? ` ${JSON.stringify(found.name.slice(0, 60))}` : '';
+  runtime.warnings.push(`${ref} was re-rendered; used ${found.ref} (${found.role}${name})`);
+  return { ref: found.ref, frameId: found.frameId ?? 0 };
+}
+
+async function refIsLive(tabId: number, ref: string, frameId = 0): Promise<boolean> {
+  const [frame] = await chrome.scripting.executeScript({
+    target: { tabId, frameIds: [frameId] },
+    world: 'ISOLATED',
+    func: refStateInPage,
+    args: [ref],
+  });
+  return frame?.result === 'live';
+}
+
+/**
+ * A ref whose element was replaced (a re-render, a reloaded frame) is found again by what it stood
+ * for when it was listed: the same role and name in the same container, or else the only node with
+ * that role and name. Anything but a unique match is an error.
+ */
+export async function relocateRef(tabId: number, ref: string, frameId?: number): Promise<SemanticNode> {
+  const gone = `STALE_REF: ${ref} is no longer on the page`;
+  if (frameId === undefined) throw new Error(`${gone}; inspect again`);
+  const [frame] = await chrome.scripting.executeScript({
+    target: { tabId, frameIds: [frameId] },
+    world: 'ISOLATED',
+    func: (value: string) => (window as any).__chromeShellRefInfo?.get(value) as [string, string, string] | undefined,
+    args: [ref],
+  });
+  const info = frame?.result;
+  if (!info) throw new Error(`${gone}; inspect again`);
+  const [role, name, context] = info;
+  const state = await readSemanticPageState(tabId, { mode: 'full', role, name, limit: 50, includeAdapters: false, scopeFrameId: frameId });
+  const others = state.nodes.filter((node) => node.ref !== ref);
+  const inPlace = others.filter((node) => (node.context || '') === context);
+  const matches = inPlace.length ? inPlace : others;
+  if (matches.length !== 1) {
+    const described = `${role}${name ? ` ${JSON.stringify(name.slice(0, 60))}` : ''}`;
+    throw new Error(`${gone}; ${matches.length} nodes now match its ${described}; inspect again`);
+  }
+  return matches[0];
 }
 
 /** Main-frame network errors (net::ERR_*) while a navigation runs; the tab itself still reports success. */
@@ -1236,6 +1401,8 @@ class ChromeShellTool extends BaseBrowserToolExecutor {
         learningResults: [],
         failFast: args?.failFast === true,
         startUrl: tab.url,
+        foreground: new ForegroundScope(),
+        warnings: [],
       };
 
       let fatalError: string | undefined;
@@ -1266,6 +1433,7 @@ class ChromeShellTool extends BaseBrowserToolExecutor {
       }
 
       await this.finishRuntimeObservation(runtime, Math.min(timeoutMs, 2000));
+      runtime.lines.push(...runtime.foreground.release().map((warning) => `warning background: ${warning}`));
       for (const tabId of openedTabs) {
         const opened = await chrome.tabs.get(tabId).catch(() => undefined);
         if (opened) runtime.observationDeltas.push(`+tab ${tabId} ${opened.pendingUrl || opened.url || ''} (opened by the page)`);
@@ -1291,8 +1459,11 @@ class ChromeShellTool extends BaseBrowserToolExecutor {
           2,
         );
       } else {
+        // The first error rides on the status line: callers that keep one line (or --out) still see why.
+        const firstError = fatalError ?? runtime.lines.find((line) => line.startsWith('error '))?.slice(6);
+        const cause = success || !firstError ? '' : ` error=${firstError.split('\n', 1)[0].slice(0, 200)}`;
         const lines = [
-          `${success ? 'ok' : 'failed'} tab=${runtime.tabId} steps=${runtime.records.length} duration=${Date.now() - startedAt}ms`,
+          `${success ? 'ok' : 'failed'} tab=${runtime.tabId} steps=${runtime.records.length} duration=${Date.now() - startedAt}ms${cause}`,
           ...runtime.lines,
         ];
         if (delta && !args?.quiet) lines.push(delta);
@@ -1391,7 +1562,8 @@ class ChromeShellTool extends BaseBrowserToolExecutor {
           ]);
         } catch (error) {
           controller.abort();
-          const message = error instanceof Error ? error.message : String(error);
+          let message = error instanceof Error ? error.message : String(error);
+          if (WAITED_IN_VAIN.test(message)) message += ` (${await diagnoseTab(runtime.tabId)})`;
           runtime.records.push({
             command: command.raw,
             status: 'failed',
@@ -1405,9 +1577,39 @@ class ChromeShellTool extends BaseBrowserToolExecutor {
           if (timeoutId !== undefined) clearTimeout(timeoutId);
         }
         runtime.lastSuccess = result;
-        if (!result) break;
+        if (!result) {
+          await this.explainWait(command, runtime);
+          break;
+        }
       }
     }
+  }
+
+  /** A command that waited in vain says what the tab looked like, instead of leaving the cause to guesswork. */
+  private async explainWait(command: ShellCommand, runtime: RuntimeState): Promise<void> {
+    const last = runtime.records.at(-1);
+    if (last?.status !== 'failed' || !WAITED_IN_VAIN.test(last.detail || '')) return;
+    const line = runtime.lines.lastIndexOf(`error ${command.name}: ${last.detail}`);
+    const diagnosis = ` (${await diagnoseTab(runtime.tabId)})`;
+    last.detail += diagnosis;
+    if (line >= 0) runtime.lines[line] += diagnosis;
+  }
+
+  /** The earlier inspect `since=vN` compares with: same tab, same view, that version. */
+  private inspectBaseline(tabId: number, view: string, since: string): SemanticPageState {
+    const version = Number(since.replace(/^v/, ''));
+    if (!Number.isInteger(version)) throw new Error(`since expects a state version such as v12, got "${since}"`);
+    const baseline = inspectBaselines.get(tabId)?.find((entry) => entry.view === view && entry.state.version === version);
+    if (!baseline) {
+      throw new Error(`since=v${version}: no recent inspect of this view at v${version} on tab ${tabId}; inspect again without since=`);
+    }
+    return baseline.state;
+  }
+
+  /** Keep the target rendering like a foreground tab when the user is not looking at it; never activate it. */
+  private async keepInForeground(command: ShellCommand, runtime: RuntimeState): Promise<void> {
+    const live = LIVE_PAGE_COMMANDS.has(command.name) || (command.name === 'tool' && command.args[0] === 'call');
+    if (live) await runtime.foreground.keep(runtime.tabId);
   }
 
   private async commandNeedsObservation(
@@ -1448,21 +1650,24 @@ class ChromeShellTool extends BaseBrowserToolExecutor {
     const remaining = () => Math.max(1, deadline - Date.now());
     const record = (status: StepRecord['status'], detail?: string, extra: RecordExtra = {}): boolean => {
       if (signal?.aborted) return false;
+      const warnings = [...runtime.warnings.splice(0), ...(extra.warnings || [])];
       runtime.records.push({
         command: command.raw,
         status,
         detail,
         ...(extra.value !== undefined ? { value: extra.value } : {}),
+        ...(warnings.length ? { warnings } : {}),
         durationMs: Date.now() - startedAt,
       });
       const line = extra.line ?? detail;
       if (status === 'success' && line) runtime.lines.push(line);
       if (status === 'failed') runtime.lines.push(`error ${command.name}: ${line || 'failed'}`);
-      for (const warning of extra.warnings || []) runtime.lines.push(`warning ${command.name}: ${warning}`);
+      for (const warning of warnings) runtime.lines.push(`warning ${command.name}: ${warning}`);
       return status === 'success';
     };
 
     try {
+      await this.keepInForeground(command, runtime);
       if (await this.commandNeedsObservation(command, runtime)) {
         await this.startRuntimeObservation(runtime, runtime.tabId);
       }
@@ -1514,10 +1719,19 @@ class ChromeShellTool extends BaseBrowserToolExecutor {
           roleFilter,
           nameFilter,
         };
-        let state = applySemanticViewFilters(
-          await readSemanticPageState(runtime.tabId, view.options),
-          view,
-        );
+        let page: SemanticPageState;
+        try {
+          page = await readSemanticPageState(runtime.tabId, view.options);
+        } catch (error) {
+          // The scope (a row, a dialog) was re-rendered since it was listed: scope its successor.
+          const { scopeRef, scopeFrameId } = view.options;
+          if (!scopeRef || !/scope ref .* not found or expired/.test(error instanceof Error ? error.message : '')) throw error;
+          const found = await ownedRef(runtime, scopeRef, scopeFrameId);
+          view.options.scopeRef = found.ref;
+          view.options.scopeFrameId = found.frameId;
+          page = await readSemanticPageState(runtime.tabId, view.options);
+        }
+        let state = applySemanticViewFilters(page, view);
         if (command.options.nth !== undefined) {
           const nth = optionNumber(command, 'nth', 0);
           const node = Number.isInteger(nth) ? state.nodes.at(nth) : undefined;
@@ -1529,11 +1743,25 @@ class ChromeShellTool extends BaseBrowserToolExecutor {
         runtime.lastPage = state;
         runtime.lastView = view;
         runtime.pipelineNodes = state.nodes;
+        if (command.name === 'inspect') {
+          const viewKey = JSON.stringify(view);
+          const since = command.options.since;
+          const baseline = since === undefined ? undefined : this.inspectBaseline(runtime.tabId, viewKey, String(since));
+          rememberInspect(runtime.tabId, viewKey, state);
+          if (baseline) {
+            const delta = diffSemanticStates(baseline, state);
+            runtime.pipelineNodes = [...delta.added, ...delta.updated];
+            return record('success', renderSemanticDelta(delta));
+          }
+        }
         // query asserts presence; inspect only observes.
         if (command.name === 'query' && !state.nodes.length) {
+          const { selector, role, name, nameContains } = view.options;
+          const cssOnly = selector && !role && name === undefined && !nameContains && !query;
+          const css = cssOnly ? await explainCssMiss(runtime.tabId, selector, frame) : '';
           return record(
             'failed',
-            `query matched 0 nodes (${describeLocator(command)}); widen it (name~=, mode=full) or inspect first`,
+            `query matched 0 nodes (${describeLocator(command)})${css}; widen it (name~=, mode=full) or inspect first`,
           );
         }
         return record('success', renderSemanticState(state));
@@ -1730,13 +1958,26 @@ class ChromeShellTool extends BaseBrowserToolExecutor {
       };
       const executeAction = async (action: ExecutableAction) => {
         const params = action.params as any;
-        for (const target of [params?.target, params?.start, params?.end]) {
-          // A ref carried over from an earlier invocation has no frame; find the frame that owns it.
-          if (target?.ref && target.frameId === undefined) {
-            const frameId = await locateRefFrame(runtime.tabId, target.ref);
-            if (frameId) target.frameId = frameId;
+        const targets: Array<{ ref: string; frameId?: number }> = [params?.target, params?.start, params?.end].filter(
+          (target) => target?.ref,
+        );
+        // A ref carried over from an earlier invocation has no frame; find the frame that owns it.
+        // An explicit frame also keeps the lookup from being answered by another frame's helper.
+        for (const target of targets) {
+          if (target.frameId === undefined) Object.assign(target, await ownedRef(runtime, target.ref));
+        }
+        const result = await dispatchAction(action);
+        if (result.status !== 'failed' || !/STALE_REF/.test(result.error?.message || '')) return result;
+        // The page re-rendered between commands of this program: find each target again, once.
+        for (const target of targets) {
+          if (!(await refIsLive(runtime.tabId, target.ref, target.frameId))) {
+            Object.assign(target, await ownedRef(runtime, target.ref, target.frameId));
           }
         }
+        return await dispatchAction(action);
+      };
+      const dispatchAction = async (action: ExecutableAction) => {
+        const params = action.params as any;
         const frameIds = [params?.target, params?.start, params?.end]
           .map((target) => Number(target?.frameId))
           .filter((frameId) => Number.isInteger(frameId));
@@ -1776,39 +2017,48 @@ class ChromeShellTool extends BaseBrowserToolExecutor {
           params: { target },
         } as any);
         if (opened.status === 'failed') return opened.error?.message || 'failed to open select';
+        // A searchable select (Element UI `filterable`/`remote`, Ant `showSearch`) lists options
+        // for what is typed; remote ones load nothing until then. Element UI unlocks its input only
+        // while the list is open, so ask after opening. Some filter on keyup, hence End.
+        const { ref, frameId } = target as { ref?: string; frameId?: number };
+        const searchable = Boolean(ref && (await acceptsText(runtime.tabId, ref, frameId)));
+        if (searchable) {
+          await this.focusRef(runtime.tabId, ref!, frameId, true);
+          const { insertText, pressKeys } = await import('./semantic-input');
+          await insertText(runtime.tabId, value);
+          await pressKeys(runtime.tabId, 'End');
+        }
 
-        let optionState: SemanticPageState | undefined;
         let options: SemanticNode[] = [];
+        // Only the list that opened: navigation menus elsewhere on the page are not candidates.
+        let listed: SemanticNode[] = [];
+        let shownSince = 0;
+        let lastShown = '';
         await pollUntil(
           // Remote option lists load after opening; wait for them within the program deadline.
           Math.min(optionNumber(command, 'timeout', 5000), remaining()),
           async () => {
-            optionState = await readSemanticPageState(runtime.tabId, {
-              mode: 'interactive',
-              query: value,
-              limit: 50,
-              includeAdapters: false,
-            });
-            options = matchExactSelectOptions(optionState.nodes, value);
-            return options.length > 0;
+            const read = (view: SemanticInspectOptions) =>
+              readSemanticPageState(runtime.tabId, { mode: 'interactive', limit: 50, includeAdapters: false, ...view });
+            options = matchExactSelectOptions((await read({ query: value })).nodes, value);
+            if (options.length) return true;
+            // A native <select> keeps its options rendered; they are not the list that opened.
+            listed = (await read({ role: 'option' })).nodes.filter((node) => node.kind !== 'option');
+            // A list that has shown the same options for a while will not grow the value.
+            const shown = listed.map((option) => option.ref).join();
+            if (shown !== lastShown) [lastShown, shownSince] = [shown, Date.now()];
+            return Boolean(shown) && Date.now() - shownSince >= SETTLED_LIST_MS;
           },
           50,
         );
         if (options.length !== 1) {
-          if (!optionState || options.length === 0) {
-            optionState = await readSemanticPageState(runtime.tabId, {
-              mode: 'interactive',
-              limit: 50,
-              includeAdapters: false,
-            });
+          if (options.length > 1) {
+            return `option "${value}" matched ${options.length} exact semantic nodes; expected exactly one: ${options.slice(0, 5).map((option) => option.ref).join(', ')}`;
           }
-          const candidates = optionState.nodes
-            .filter((node) => ['option', 'menuitem', 'radio'].includes(node.role))
-            .slice(0, 5)
-            .map((node) => node.value || node.name)
-            .filter(Boolean)
-            .join(', ');
-          return `option "${value}" matched ${options.length} exact semantic nodes; expected exactly one${candidates ? `; candidates: ${candidates}` : ''}`;
+          const shown = listed.slice(0, 8).map((option) => option.name || option.value).filter(Boolean).join(', ');
+          return listed.length
+            ? `option "${value}" is not in the list; it shows ${listed.length} option(s): ${shown}${listed.length > 8 ? ', …' : ''}`
+            : `option "${value}" not found: no option is visible after opening${searchable ? ' the list and typing the value' : ' the list'}`;
         }
         const picked = await executeAction({
           id: id(),
@@ -2036,14 +2286,11 @@ class ChromeShellTool extends BaseBrowserToolExecutor {
         const errors = watchNavigationErrors(runtime.tabId);
         try {
           if (!(await run({ id: id(), type: 'navigate', params: { url } } as ExecutableAction))) return false;
-          // The navigate action returns once the load starts; wait for its outcome so a DNS or
+          // The navigate action returns once the load starts; wait for the document so a DNS or
           // connection failure is reported here instead of surfacing as a missing element later.
-          const settleMs = Math.min(optionNumber(command, 'timeout', 10000), remaining());
-          const settled = await pollUntil(settleMs, async () => {
-            if (errors.failed()) return true;
-            const tab = await chrome.tabs.get(runtime.tabId);
-            return tab.status === 'complete';
-          }, 100);
+          // Slow images and long polling do not hold the program back; a `wait` covers the content.
+          const settleMs = Math.min(optionNumber(command, 'timeout', 10000), Math.floor(remaining() / 2));
+          const settled = await pollUntil(settleMs, async () => errors.failed() || (await isDocumentReady(runtime.tabId)), 100);
           const failure = await errors.result();
           if (failure) {
             runtime.lines.pop();
@@ -2080,11 +2327,12 @@ class ChromeShellTool extends BaseBrowserToolExecutor {
         if (action === 'new') {
           await this.finishRuntimeObservation(runtime, 0);
           const url = stringValue(command.args[1] || command.options.url, runtime.vars);
-          const loadTimeoutMs = Math.min(optionNumber(command, 'timeout', 30000), remaining());
+          // At most half the remaining budget: the program still needs time for what follows.
+          const loadTimeoutMs = Math.min(optionNumber(command, 'timeout', 10000), Math.floor(remaining() / 2));
           const result = await executeAction({
             id: id(),
             type: 'openTab',
-            params: { url, active: optionBoolean(command, 'active', true), loadTimeoutMs },
+            params: { url, active: optionBoolean(command, 'active', false), loadTimeoutMs },
             policy: { timeout: { ms: Math.min(remaining(), loadTimeoutMs + 1000), scope: 'action' } },
           } as ExecutableAction);
           syncActionTabContext(result.newTabId, runtime, ctx);
@@ -2102,7 +2350,7 @@ class ChromeShellTool extends BaseBrowserToolExecutor {
           const success = await run({
             id: id(),
             type: 'switchTab',
-            params: { tabId: targetId },
+            params: { tabId: targetId, focusWindow: optionBoolean(command, 'focus') },
           } as ExecutableAction);
           return success;
         }
@@ -2121,9 +2369,11 @@ class ChromeShellTool extends BaseBrowserToolExecutor {
         throw new Error(`unsupported tab action "${action}"`);
       }
       if (command.name === 'wait') {
-        if (command.options.text) {
-          const expected = stringValue(command.options.text, runtime.vars);
-          if (!expected) throw new Error('wait text expects a non-empty value');
+        if (command.options.text !== undefined || command.options.gone !== undefined) {
+          // text= waits for the text to appear, gone= for it to disappear (a spinner, "加载中").
+          const present = command.options.text !== undefined;
+          const expected = stringValue(present ? command.options.text : command.options.gone, runtime.vars);
+          if (!expected) throw new Error(`wait ${present ? 'text' : 'gone'} expects a non-empty value`);
           const timeout = Math.min(optionNumber(command, 'timeout', 10000), remaining());
           const outcome = await pollUntil(timeout, async () => {
             const results = (await chrome.scripting.executeScript({
@@ -2132,7 +2382,7 @@ class ChromeShellTool extends BaseBrowserToolExecutor {
               func: (text: string) => (document.body?.innerText || '').includes(text) || document.title.includes(text),
               args: [expected],
             } as any)) as Array<{ result?: boolean }>;
-            return results?.[0]?.result === true;
+            return results?.[0]?.result === present;
           });
           if (!outcome.matched) {
             const transient = outcome.lastError
@@ -2140,10 +2390,10 @@ class ChromeShellTool extends BaseBrowserToolExecutor {
               : '';
             return record(
               'failed',
-              `Text "${expected}" did not appear within ${timeout}ms${transient}`,
+              `Text "${expected}" did not ${present ? 'appear' : 'disappear'} within ${timeout}ms${transient}`,
             );
           }
-          return record('success', `wait text: ${JSON.stringify(expected)}`);
+          return record('success', `wait ${present ? 'text' : 'gone'}: ${JSON.stringify(expected)}`);
         }
         let condition: any;
         if (command.options.url !== undefined || command.options['url~'] !== undefined) {
@@ -2227,6 +2477,25 @@ class ChromeShellTool extends BaseBrowserToolExecutor {
             );
           }
           return record('success', `wait navigation: tab ${runtime.tabId}`);
+        } else if (command.args[0] === 'idle') {
+          // Neither the page structure nor its fetch/XHR traffic changed for IDLE_QUIET_MS.
+          const timeout = Math.min(optionNumber(command, 'timeout', 10000), remaining());
+          await this.startRuntimeObservation(runtime, runtime.tabId);
+          let signal = '';
+          let quietSince = Date.now();
+          const outcome = await pollUntil(timeout, async () => {
+            const current = semanticSignalKey(await readSemanticPageSignal(runtime.tabId));
+            if (current !== signal || hasPendingApiCalls(runtime.tabId, LONG_LIVED_REQUEST_MS)) {
+              signal = current;
+              quietSince = Date.now();
+              return false;
+            }
+            return Date.now() - quietSince >= IDLE_QUIET_MS;
+          }, 100);
+          if (!outcome.matched) {
+            return record('failed', `page did not settle within ${timeout}ms: its DOM or network kept changing${outcome.lastError ? `; ${outcome.lastError}` : ''}`);
+          }
+          return record('success', `wait idle: quiet for ${IDLE_QUIET_MS}ms`);
         } else if (command.args[0] === 'network') {
           const timeout = Math.min(optionNumber(command, 'timeout', 10000), remaining());
           await this.startRuntimeObservation(runtime, runtime.tabId);
@@ -2374,12 +2643,8 @@ class ChromeShellTool extends BaseBrowserToolExecutor {
           timeoutMs: remaining(),
         });
         runtime.artifacts.push({ type: 'image', data: shot.data, mimeType: shot.mimeType });
-        const notes = [
-          `${shot.width}x${shot.height}`,
-          target?.ref ? `element ${target.ref}` : full ? 'full page' : 'viewport',
-          ...(shot.activated ? ['tab briefly activated to render'] : []),
-        ];
-        return record('success', `screenshot: ${notes.join(', ')}`, {
+        const scope = target?.ref ? `element ${target.ref}` : full ? 'full page' : 'viewport';
+        return record('success', `screenshot: ${shot.width}x${shot.height}, ${scope}`, {
           warnings: shot.clipped ? ['full page taller than 16384px; captured the top part'] : [],
         });
       }
@@ -2671,7 +2936,8 @@ class ChromeShellTool extends BaseBrowserToolExecutor {
       runtime.pipelineNodes.find((node) => node.ref === ref) || runtime.lastPage?.nodes.find((node) => node.ref === ref);
     if (refText) {
       const ref = stripRef(refText);
-      return { ref, frameId: explicitFrame ?? known(ref)?.frameId };
+      const frameId = explicitFrame ?? known(ref)?.frameId;
+      return frameId === undefined ? await ownedRef(runtime, ref) : { ref, frameId };
     }
     const css = stringValue(command.options.css, vars) || (allowMany && firstArg ? firstArg : undefined);
     const role = stringValue(command.options.role, vars);

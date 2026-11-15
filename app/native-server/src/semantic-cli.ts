@@ -144,10 +144,20 @@ async function main(): Promise<void> {
       'the whole program arrived wrapped in quotes (cmd.exe passes them through); drop the outer quotes, or use --file/--stdin',
     );
   }
-  const baseDir = options.file ? path.dirname(path.resolve(options.file)) : process.cwd();
-  const inlined = inlineJavascriptFiles(source, (file) =>
-    readFileSync(path.resolve(baseDir, file), 'utf8'),
-  );
+  // `js file=` paths are relative to the program file, else to an explicit -C workspace, else to cwd.
+  const baseDir = options.file
+    ? path.dirname(path.resolve(options.file))
+    : program.getOptionValueSource('workspace') === 'cli'
+      ? path.resolve(options.workspace!)
+      : process.cwd();
+  const inlined = inlineJavascriptFiles(source, (file) => {
+    const target = path.resolve(baseDir, file);
+    try {
+      return readFileSync(target, 'utf8');
+    } catch (error) {
+      throw new Error(`js file=${file}: cannot read ${target} (relative paths resolve against ${baseDir}): ${(error as Error).message}`);
+    }
+  });
   const script = inlined.script;
   const vars = { ...inlined.vars, ...(await resolveVariables(options)) };
   const endpoint = resolveCommandEndpoint(options.endpoint);

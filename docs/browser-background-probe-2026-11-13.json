@@ -1,0 +1,748 @@
+{
+  "generated_utc": "2026-11-13T14:25:24.950Z",
+  "chrome": "Chrome/157.0.8103.51",
+  "platform": "win32",
+  "results": [
+    {
+      "scenario": "background-tab",
+      "measure": "none",
+      "baseline": {
+        "visibility": "hidden",
+        "hasFocus": false
+      },
+      "visibility": "hidden",
+      "hasFocus": false,
+      "rafPerSec": 0,
+      "timeoutsPerSec": 1,
+      "transitionDone": false,
+      "rafAwait": {
+        "ok": false,
+        "ms": 2002,
+        "error": "Runtime.evaluate timed out after 2000ms"
+      },
+      "timer50": {
+        "ok": true,
+        "ms": 95
+      },
+      "mouseMove": {
+        "ok": false,
+        "ms": 3002,
+        "error": "Input.dispatchMouseEvent timed out after 3000ms"
+      },
+      "click": {
+        "ok": true,
+        "ms": 2
+      },
+      "trustedClicks": 0,
+      "intersection": true,
+      "screenshot": {
+        "ok": false,
+        "ms": 3003,
+        "error": "Page.captureScreenshot timed out after 3000ms"
+      },
+      "screencastFrames": 0
+    },
+    {
+      "scenario": "background-tab",
+      "measure": "focus",
+      "baseline": {
+        "visibility": "hidden",
+        "hasFocus": false
+      },
+      "visibility": "visible",
+      "hasFocus": true,
+      "rafPerSec": 4,
+      "timeoutsPerSec": 202,
+      "transitionDone": false,
+      "rafAwait": {
+        "ok": true,
+        "ms": 31
+      },
+      "timer50": {
+        "ok": true,
+        "ms": 55
+      },
+      "mouseMove": {
+        "ok": true,
+        "ms": 945
+      },
+      "click": {
+        "ok": true,
+        "ms": 3
+      },
+      "trustedClicks": 1,
+      "intersection": true,
+      "screenshot": {
+        "ok": false,
+        "ms": 3003,
+        "error": "Page.captureScreenshot timed out after 3000ms"
+      },
+      "screencastFrames": 0
+    },
+    {
+      "scenario": "background-tab",
+      "measure": "screencast",
+      "baseline": {
+        "visibility": "hidden",
+        "hasFocus": false
+      },
+      "visibility": "hidden",
+      "hasFocus": false,
+      "rafPerSec": 0,
+      "timeoutsPerSec": 1,
+      "transitionDone": false,
+      "rafAwait": {
+        "ok": false,
+        "ms": 2014,
+        "error": "Runtime.evaluate timed out after 2000ms"
+      },
+      "timer50": {
+        "ok": true,
+        "ms": 189
+      },
+      "mouseMove": {
+        "ok": false,
+        "ms": 3003,
+        "error": "Input.dispatchMouseEvent timed out after 3000ms"
+      },
+      "click": {
+        "ok": true,
+        "ms": 3
+      },
+      "trustedClicks": 0,
+      "intersection": true,
+      "screenshot": {
+        "ok": true,
+        "ms": 108
+      },
+      "screencastFrames": 1
+    },
+    {
+      "scenario": "background-tab",
+      "measure": "focus+screencast",
+      "baseline": {
+        "visibility": "hidden",
+        "hasFocus": false
+      },
+      "visibility": "visible",
+      "hasFocus": true,
+      "rafPerSec": 120,
+      "timeoutsPerSec": 123,
+      "transitionDone": true,
+      "rafAwait": {
+        "ok": true,
+        "ms": 2
+      },
+      "timer50": {
+        "ok": true,
+        "ms": 59
+      },
+      "mouseMove": {
+        "ok": true,
+        "ms": 8
+      },
+      "click": {
+        "ok": true,
+        "ms": 2
+      },
+      "trustedClicks": 1,
+      "intersection": true,
+      "screenshot": {
+        "ok": true,
+        "ms": 53
+      },
+      "screencastFrames": 15
+    },
+    {
+      "scenario": "unfocused-window",
+      "measure": "none",
+      "baseline": {
+        "visibility": "hidden",
+        "hasFocus": false
+      },
+      "visibility": "hidden",
+      "hasFocus": false,
+      "rafPerSec": 0,
+      "timeoutsPerSec": 1,
+      "transitionDone": false,
+      "rafAwait": {
+        "ok": false,
+        "ms": 2013,
+        "error": "Runtime.evaluate timed out after 2000ms"
+      },
+      "timer50": {
+        "ok": true,
+        "ms": 887
+      },
+      "mouseMove": {
+        "ok": false,
+        "ms": 3014,
+        "error": "Input.dispatchMouseEvent timed out after 3000ms"
+      },
+      "click": {
+        "ok": true,
+        "ms": 3
+      },
+      "trustedClicks": 0,
+      "intersection": true,
+      "screenshot": {
+        "ok": true,
+        "ms": 70
+      },
+      "screencastFrames": 0
+    },
+    {
+      "scenario": "unfocused-window",
+      "measure": "focus",
+      "baseline": {
+        "visibility": "hidden",
+        "hasFocus": false
+      },
+      "visibility": "visible",
+      "hasFocus": true,
+      "rafPerSec": 118,
+      "timeoutsPerSec": 122,
+      "transitionDone": true,
+      "rafAwait": {
+        "ok": true,
+        "ms": 1
+      },
+      "timer50": {
+        "ok": true,
+        "ms": 59
+      },
+      "mouseMove": {
+        "ok": true,
+        "ms": 8
+      },
+      "click": {
+        "ok": true,
+        "ms": 3
+      },
+      "trustedClicks": 1,
+      "intersection": true,
+      "screenshot": {
+        "ok": true,
+        "ms": 67
+      },
+      "screencastFrames": 0
+    },
+    {
+      "scenario": "unfocused-window",
+      "measure": "screencast",
+      "baseline": {
+        "visibility": "hidden",
+        "hasFocus": false
+      },
+      "visibility": "hidden",
+      "hasFocus": false,
+      "rafPerSec": 0,
+      "timeoutsPerSec": 1,
+      "transitionDone": false,
+      "rafAwait": {
+        "ok": false,
+        "ms": 2011,
+        "error": "Runtime.evaluate timed out after 2000ms"
+      },
+      "timer50": {
+        "ok": true,
+        "ms": 780
+      },
+      "mouseMove": {
+        "ok": false,
+        "ms": 3007,
+        "error": "Input.dispatchMouseEvent timed out after 3000ms"
+      },
+      "click": {
+        "ok": true,
+        "ms": 2
+      },
+      "trustedClicks": 0,
+      "intersection": true,
+      "screenshot": {
+        "ok": true,
+        "ms": 85
+      },
+      "screencastFrames": 2
+    },
+    {
+      "scenario": "unfocused-window",
+      "measure": "focus+screencast",
+      "baseline": {
+        "visibility": "hidden",
+        "hasFocus": false
+      },
+      "visibility": "visible",
+      "hasFocus": true,
+      "rafPerSec": 121,
+      "timeoutsPerSec": 123,
+      "transitionDone": true,
+      "rafAwait": {
+        "ok": true,
+        "ms": 8
+      },
+      "timer50": {
+        "ok": true,
+        "ms": 56
+      },
+      "mouseMove": {
+        "ok": true,
+        "ms": 4
+      },
+      "click": {
+        "ok": true,
+        "ms": 3
+      },
+      "trustedClicks": 1,
+      "intersection": true,
+      "screenshot": {
+        "ok": true,
+        "ms": 58
+      },
+      "screencastFrames": 15
+    },
+    {
+      "scenario": "occluded-window",
+      "measure": "none",
+      "baseline": {
+        "visibility": "hidden",
+        "hasFocus": false
+      },
+      "visibility": "hidden",
+      "hasFocus": false,
+      "rafPerSec": 0,
+      "timeoutsPerSec": 1,
+      "transitionDone": false,
+      "rafAwait": {
+        "ok": false,
+        "ms": 2011,
+        "error": "Runtime.evaluate timed out after 2000ms"
+      },
+      "timer50": {
+        "ok": true,
+        "ms": 660
+      },
+      "mouseMove": {
+        "ok": false,
+        "ms": 3001,
+        "error": "Input.dispatchMouseEvent timed out after 3000ms"
+      },
+      "click": {
+        "ok": true,
+        "ms": 2
+      },
+      "trustedClicks": 0,
+      "intersection": true,
+      "screenshot": {
+        "ok": true,
+        "ms": 89
+      },
+      "screencastFrames": 0
+    },
+    {
+      "scenario": "occluded-window",
+      "measure": "focus",
+      "baseline": {
+        "visibility": "hidden",
+        "hasFocus": false
+      },
+      "visibility": "visible",
+      "hasFocus": true,
+      "rafPerSec": 120,
+      "timeoutsPerSec": 124,
+      "transitionDone": true,
+      "rafAwait": {
+        "ok": true,
+        "ms": 3
+      },
+      "timer50": {
+        "ok": true,
+        "ms": 59
+      },
+      "mouseMove": {
+        "ok": true,
+        "ms": 9
+      },
+      "click": {
+        "ok": true,
+        "ms": 3
+      },
+      "trustedClicks": 1,
+      "intersection": true,
+      "screenshot": {
+        "ok": true,
+        "ms": 57
+      },
+      "screencastFrames": 0
+    },
+    {
+      "scenario": "occluded-window",
+      "measure": "screencast",
+      "baseline": {
+        "visibility": "hidden",
+        "hasFocus": false
+      },
+      "visibility": "hidden",
+      "hasFocus": false,
+      "rafPerSec": 0,
+      "timeoutsPerSec": 1,
+      "transitionDone": false,
+      "rafAwait": {
+        "ok": false,
+        "ms": 2014,
+        "error": "Runtime.evaluate timed out after 2000ms"
+      },
+      "timer50": {
+        "ok": true,
+        "ms": 468
+      },
+      "mouseMove": {
+        "ok": false,
+        "ms": 3012,
+        "error": "Input.dispatchMouseEvent timed out after 3000ms"
+      },
+      "click": {
+        "ok": true,
+        "ms": 2
+      },
+      "trustedClicks": 0,
+      "intersection": true,
+      "screenshot": {
+        "ok": true,
+        "ms": 67
+      },
+      "screencastFrames": 2
+    },
+    {
+      "scenario": "occluded-window",
+      "measure": "focus+screencast",
+      "baseline": {
+        "visibility": "hidden",
+        "hasFocus": false
+      },
+      "visibility": "visible",
+      "hasFocus": true,
+      "rafPerSec": 121,
+      "timeoutsPerSec": 119,
+      "transitionDone": true,
+      "rafAwait": {
+        "ok": true,
+        "ms": 7
+      },
+      "timer50": {
+        "ok": true,
+        "ms": 56
+      },
+      "mouseMove": {
+        "ok": true,
+        "ms": 3
+      },
+      "click": {
+        "ok": true,
+        "ms": 4
+      },
+      "trustedClicks": 1,
+      "intersection": true,
+      "screenshot": {
+        "ok": true,
+        "ms": 53
+      },
+      "screencastFrames": 15
+    },
+    {
+      "scenario": "minimized-window",
+      "measure": "none",
+      "baseline": {
+        "visibility": "hidden",
+        "hasFocus": false
+      },
+      "visibility": "hidden",
+      "hasFocus": false,
+      "rafPerSec": 0,
+      "timeoutsPerSec": 1,
+      "transitionDone": false,
+      "rafAwait": {
+        "ok": false,
+        "ms": 2001,
+        "error": "Runtime.evaluate timed out after 2000ms"
+      },
+      "timer50": {
+        "ok": true,
+        "ms": 582
+      },
+      "mouseMove": {
+        "ok": false,
+        "ms": 3008,
+        "error": "Input.dispatchMouseEvent timed out after 3000ms"
+      },
+      "click": {
+        "ok": true,
+        "ms": 3
+      },
+      "trustedClicks": 0,
+      "intersection": true,
+      "screenshot": {
+        "ok": false,
+        "ms": 3011,
+        "error": "Page.captureScreenshot timed out after 3000ms"
+      },
+      "screencastFrames": 0
+    },
+    {
+      "scenario": "minimized-window",
+      "measure": "focus",
+      "baseline": {
+        "visibility": "hidden",
+        "hasFocus": false
+      },
+      "visibility": "visible",
+      "hasFocus": true,
+      "rafPerSec": 4,
+      "timeoutsPerSec": 67,
+      "transitionDone": false,
+      "rafAwait": {
+        "ok": true,
+        "ms": 28
+      },
+      "timer50": {
+        "ok": true,
+        "ms": 66
+      },
+      "mouseMove": {
+        "ok": true,
+        "ms": 934
+      },
+      "click": {
+        "ok": true,
+        "ms": 4
+      },
+      "trustedClicks": 1,
+      "intersection": true,
+      "screenshot": {
+        "ok": false,
+        "ms": 3012,
+        "error": "Page.captureScreenshot timed out after 3000ms"
+      },
+      "screencastFrames": 0
+    },
+    {
+      "scenario": "minimized-window",
+      "measure": "screencast",
+      "baseline": {
+        "visibility": "hidden",
+        "hasFocus": false
+      },
+      "visibility": "hidden",
+      "hasFocus": false,
+      "rafPerSec": 0,
+      "timeoutsPerSec": 1,
+      "transitionDone": false,
+      "rafAwait": {
+        "ok": false,
+        "ms": 2009,
+        "error": "Runtime.evaluate timed out after 2000ms"
+      },
+      "timer50": {
+        "ok": true,
+        "ms": 936
+      },
+      "mouseMove": {
+        "ok": false,
+        "ms": 3010,
+        "error": "Input.dispatchMouseEvent timed out after 3000ms"
+      },
+      "click": {
+        "ok": true,
+        "ms": 2
+      },
+      "trustedClicks": 0,
+      "intersection": true,
+      "screenshot": {
+        "ok": true,
+        "ms": 76
+      },
+      "screencastFrames": 2
+    },
+    {
+      "scenario": "minimized-window",
+      "measure": "focus+screencast",
+      "baseline": {
+        "visibility": "hidden",
+        "hasFocus": false
+      },
+      "visibility": "visible",
+      "hasFocus": true,
+      "rafPerSec": 121,
+      "timeoutsPerSec": 202,
+      "transitionDone": true,
+      "rafAwait": {
+        "ok": true,
+        "ms": 5
+      },
+      "timer50": {
+        "ok": true,
+        "ms": 56
+      },
+      "mouseMove": {
+        "ok": true,
+        "ms": 3
+      },
+      "click": {
+        "ok": true,
+        "ms": 3
+      },
+      "trustedClicks": 1,
+      "intersection": true,
+      "screenshot": {
+        "ok": true,
+        "ms": 52
+      },
+      "screencastFrames": 15
+    },
+    {
+      "scenario": "background-tab",
+      "measure": "focus+lite",
+      "baseline": {
+        "visibility": "hidden",
+        "hasFocus": false
+      },
+      "visibility": "visible",
+      "hasFocus": true,
+      "rafPerSec": 121,
+      "timeoutsPerSec": 209,
+      "transitionDone": true,
+      "rafAwait": {
+        "ok": true,
+        "ms": 3
+      },
+      "timer50": {
+        "ok": true,
+        "ms": 54
+      },
+      "mouseMove": {
+        "ok": true,
+        "ms": 4
+      },
+      "click": {
+        "ok": true,
+        "ms": 3
+      },
+      "trustedClicks": 1,
+      "intersection": true,
+      "screenshot": {
+        "ok": true,
+        "ms": 78
+      },
+      "screencastFrames": 0
+    },
+    {
+      "scenario": "unfocused-window",
+      "measure": "focus+lite",
+      "baseline": {
+        "visibility": "hidden",
+        "hasFocus": false
+      },
+      "visibility": "visible",
+      "hasFocus": true,
+      "rafPerSec": 118,
+      "timeoutsPerSec": 121,
+      "transitionDone": true,
+      "rafAwait": {
+        "ok": true,
+        "ms": 4
+      },
+      "timer50": {
+        "ok": true,
+        "ms": 59
+      },
+      "mouseMove": {
+        "ok": true,
+        "ms": 8
+      },
+      "click": {
+        "ok": true,
+        "ms": 3
+      },
+      "trustedClicks": 1,
+      "intersection": true,
+      "screenshot": {
+        "ok": true,
+        "ms": 54
+      },
+      "screencastFrames": 0
+    },
+    {
+      "scenario": "occluded-window",
+      "measure": "focus+lite",
+      "baseline": {
+        "visibility": "hidden",
+        "hasFocus": false
+      },
+      "visibility": "visible",
+      "hasFocus": true,
+      "rafPerSec": 118,
+      "timeoutsPerSec": 121,
+      "transitionDone": true,
+      "rafAwait": {
+        "ok": true,
+        "ms": 9
+      },
+      "timer50": {
+        "ok": true,
+        "ms": 59
+      },
+      "mouseMove": {
+        "ok": true,
+        "ms": 9
+      },
+      "click": {
+        "ok": true,
+        "ms": 6
+      },
+      "trustedClicks": 1,
+      "intersection": true,
+      "screenshot": {
+        "ok": true,
+        "ms": 50
+      },
+      "screencastFrames": 0
+    },
+    {
+      "scenario": "minimized-window",
+      "measure": "focus+lite",
+      "baseline": {
+        "visibility": "hidden",
+        "hasFocus": false
+      },
+      "visibility": "visible",
+      "hasFocus": true,
+      "rafPerSec": 122,
+      "timeoutsPerSec": 119,
+      "transitionDone": true,
+      "rafAwait": {
+        "ok": true,
+        "ms": 10
+      },
+      "timer50": {
+        "ok": true,
+        "ms": 58
+      },
+      "mouseMove": {
+        "ok": true,
+        "ms": 9
+      },
+      "click": {
+        "ok": true,
+        "ms": 4
+      },
+      "trustedClicks": 1,
+      "intersection": true,
+      "screenshot": {
+        "ok": true,
+        "ms": 70
+      },
+      "screencastFrames": 0
+    }
+  ],
+  "conclusion": "Focus emulation plus a minimal screencast (jpeg q1, 32x32, everyNthFrame 60) keeps hidden pages at foreground behaviour in all four hide reasons; neither measure alone suffices for background tabs or minimized windows."
+}

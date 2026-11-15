@@ -15,11 +15,11 @@ interface NavigateToolParams {
   refresh?: boolean;
   tabId?: number;
   windowId?: number;
-  background?: boolean; // when true, do not activate tab or focus window
 }
 
 /**
- * Tool for navigating to URLs in browser tabs or windows
+ * Tool for navigating to URLs in browser tabs or windows. It never activates a tab or focuses a
+ * window: the user keeps working where they are.
  */
 class NavigateTool extends BaseBrowserToolExecutor {
   name = TOOL_NAMES.BROWSER.NAVIGATE;
@@ -32,7 +32,6 @@ class NavigateTool extends BaseBrowserToolExecutor {
       url,
       refresh = false,
       tabId,
-      background,
       windowId,
     } = args;
 
@@ -87,12 +86,6 @@ class NavigateTool extends BaseBrowserToolExecutor {
         if (!targetTab.id) {
           return createErrorResponse('No target tab found for history navigation');
         }
-
-        // Respect background flag for focus behavior
-        await this.ensureFocus(targetTab, {
-          activate: background !== true,
-          focusWindow: background !== true,
-        });
 
         await cdpSessionManager.withSession(targetTab.id, 'history', async () => {
           const history = await cdpSessionManager.sendCommand<{ currentIndex: number; entries: Array<{ id: number }> }>(targetTab.id!, 'Page.getNavigationHistory');
@@ -203,17 +196,7 @@ class NavigateTool extends BaseBrowserToolExecutor {
         if (explicitTab && typeof explicitTab.id === 'number') {
           await chrome.tabs.update(explicitTab.id, { url });
         }
-        // Optionally bring to foreground based on background flag
-        await this.ensureFocus(existingTab, {
-          activate: background !== true,
-          focusWindow: background !== true,
-        });
-
-        console.log(`Activated existing Tab ID: ${existingTab.id}`);
-        // Get updated tab information and return it
         const updatedTab = await chrome.tabs.get(existingTab.id);
-
-        // Trigger auto-capture on existing tab activation
 
         return {
           content: [
@@ -221,7 +204,7 @@ class NavigateTool extends BaseBrowserToolExecutor {
               type: 'text',
               text: JSON.stringify({
                 success: true,
-                message: 'Activated existing tab',
+                message: explicitTab ? 'Navigated tab' : 'URL already open in tab',
                 tabId: updatedTab.id,
                 windowId: updatedTab.windowId,
                 url: updatedTab.url,
@@ -243,7 +226,7 @@ class NavigateTool extends BaseBrowserToolExecutor {
           url: url,
           width: typeof width === 'number' ? width : DEFAULT_WINDOW_WIDTH,
           height: typeof height === 'number' ? height : DEFAULT_WINDOW_HEIGHT,
-          focused: background === true ? false : true,
+          focused: false,
         });
 
         if (newWindow && newWindow.id !== undefined) {
@@ -291,11 +274,8 @@ class NavigateTool extends BaseBrowserToolExecutor {
           const newTab = await chrome.tabs.create({
             url: url,
             windowId: targetWindow.id,
-            active: background === true ? false : true,
+            active: false,
           });
-          if (background !== true) {
-            await chrome.windows.update(targetWindow.id, { focused: true });
-          }
 
           console.log(
             `URL opened in new Tab ID: ${newTab.id} in existing Window ID: ${targetWindow.id}`,
@@ -329,7 +309,7 @@ class NavigateTool extends BaseBrowserToolExecutor {
             url: url,
             width: DEFAULT_WINDOW_WIDTH,
             height: DEFAULT_WINDOW_HEIGHT,
-            focused: true,
+            focused: false,
           });
 
           if (fallbackWindow && fallbackWindow.id !== undefined) {
@@ -561,58 +541,3 @@ class CloseTabsTool extends BaseBrowserToolExecutor {
 }
 
 export const closeTabsTool = new CloseTabsTool();
-
-interface SwitchTabToolParams {
-  tabId: number;
-  windowId?: number;
-}
-
-/**
- * Tool for switching the active tab
- */
-class SwitchTabTool extends BaseBrowserToolExecutor {
-  name = TOOL_NAMES.BROWSER.SWITCH_TAB;
-
-  async execute(args: SwitchTabToolParams): Promise<ToolResult> {
-    const { tabId, windowId } = args;
-
-    console.log(`Attempting to switch to tab ID: ${tabId} in window ID: ${windowId}`);
-
-    try {
-      if (windowId !== undefined) {
-        await chrome.windows.update(windowId, { focused: true });
-      }
-      await chrome.tabs.update(tabId, { active: true });
-
-      const updatedTab = await chrome.tabs.get(tabId);
-
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify({
-              success: true,
-              message: `Successfully switched to tab ID: ${tabId}`,
-              tabId: updatedTab.id,
-              windowId: updatedTab.windowId,
-              url: updatedTab.url,
-            }),
-          },
-        ],
-        isError: false,
-      };
-    } catch (error) {
-      if (chrome.runtime.lastError) {
-        console.error(`Chrome API Error: ${chrome.runtime.lastError.message}`, error);
-        return createErrorResponse(`Chrome API Error: ${chrome.runtime.lastError.message}`);
-      } else {
-        console.error('Error in SwitchTabTool.execute:', error);
-        return createErrorResponse(
-          `Error switching tab: ${error instanceof Error ? error.message : String(error)}`,
-        );
-      }
-    }
-  }
-}
-
-export const switchTabTool = new SwitchTabTool();

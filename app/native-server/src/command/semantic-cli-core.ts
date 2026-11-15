@@ -80,7 +80,7 @@ export function inlineJavascriptFiles(
 
 const COMMAND_HELP: Record<string, string> = {
   inspect:
-    'inspect [interactive|forms|tables|dialog|text|full] [query=TEXT] [role=R] [name=EXACT] [name~=PART] [limit=N] [scope=pipe|@ref] [frame=N]',
+    'inspect [interactive|forms|tables|dialog|text|full] [query=TEXT] [role=R] [name=EXACT] [name~=PART] [limit=N] [scope=pipe|@ref] [frame=N] [since=vN]  — since= prints only the changes from an earlier inspect of the same view',
   query:
     'query ["TEXT"|query=TEXT] [role=R] [name=EXACT] [name~=PART] [css=SEL] [nth=I] [mode=...] — fails on 0 matches',
   diff: 'diff  — changes since the earlier inspect in this program',
@@ -101,14 +101,14 @@ const COMMAND_HELP: Record<string, string> = {
   upload: 'upload css=SEL file=PATH | upload @ref file=["a","b"]',
   screenshot:
     'screenshot [@ref|css=SEL|role=R name=N] [full=true]  — CDP capture of the target tab, no downloads',
-  js: 'js code="return document.title" | js "location.href" | js file=PATH.js [frame=N] [max=BYTES]  — VARS holds program variables',
+  js: 'js "location.href" | js code="const links = [...document.links]; links.length" | js file=PATH.js [frame=N] [max=BYTES]  — returns the last expression, like the console; VARS holds program variables',
   http: 'http [GET|POST|...] URL [headers={...}] [body=JSON|form={...}] [pick=path|[paths]|{alias:path}] [as=$v] [context=page|extension]',
   storage: 'storage get local|session|cookie key=NAME as=$var  — value is never printed',
   extract:
     'extract css=SEL [attr=text|html|value|href|NAME] [all=true] [fields={"k":"sel@attr"}] [as=$v] | extract @ref',
-  wait: 'wait MS | wait text=T | wait selector=SEL [state=visible|attached|detached] | wait url~=PART | wait navigation | wait network [timeout=MS]',
+  wait: 'wait text=T | wait gone=T | wait idle | wait selector=SEL [state=visible|attached|detached] | wait url~=PART | wait navigation | wait network [timeout=MS] | wait MS (last resort)',
   assert: 'assert text=T | assert exists=SEL | assert visible=SEL',
-  tab: 'tab list [match=TEXT] | tab new URL [active=false] [timeout=MS] | tab switch ID | tab close [ID]',
+  tab: 'tab list [match=TEXT] | tab new URL [active=true] [timeout=MS] | tab switch ID [focus=true] | tab close [ID]',
   navigate: 'navigate URL  — fails on a network error page',
   back: 'back  — history back in the target tab',
   forward: 'forward  — history forward in the target tab',
