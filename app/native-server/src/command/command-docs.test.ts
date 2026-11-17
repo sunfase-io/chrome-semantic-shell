@@ -30,3 +30,35 @@ describe('command reference stays in sync with the DSL', () => {
     ).toEqual([]);
   });
 });
+
+describe('chrome-shell-bridge reference stays in sync with the CLI', () => {
+  // commander builds the help text from these declarations, so declared means listed in --help.
+  const bridgeCommands = [
+    ...read('app/native-server/src/cli.ts').matchAll(
+      /\.command\('([a-z-]+)'\)\s*\.description\(\s*'/g,
+    ),
+  ].map((match) => match[1]);
+
+  it('declares the bridge commands with a description', () => {
+    expect(bridgeCommands).toEqual(
+      expect.arrayContaining(['register', 'status', 'install-extension', 'skill-path']),
+    );
+  });
+
+  it.each(['README.md', 'README_zh.md'])(
+    'lists every bridge command in the %s quick reference',
+    (file) => {
+      const text = read(file);
+      expect(
+        bridgeCommands.filter((command) => !text.includes(`| \`chrome-shell-bridge ${command}`)),
+      ).toEqual([]);
+    },
+  );
+
+  it('shows every bridge command in the full CLI reference', () => {
+    const text = read('skills/chrome-shell/references/semantic-shell.md');
+    expect(
+      bridgeCommands.filter((command) => !text.includes(`chrome-shell-bridge ${command}`)),
+    ).toEqual([]);
+  });
+});

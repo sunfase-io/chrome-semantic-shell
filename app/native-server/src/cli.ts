@@ -12,10 +12,13 @@ import { BrowserType, parseBrowserType, detectInstalledBrowsers } from './script
 import { readCommandPortState } from './command/port-state';
 import { readShellConfig, shellConfigPath, writeShellConfig } from './config';
 import { findShimDirectories, inspectShims, installShims } from './command/shims';
+import { defaultExtensionDir, installExtension, resolveSkillDir } from './command/bundled-assets';
 import * as path from 'node:path';
 
+const packageVersion: string = require('../package.json').version;
+
 program
-  .version(require('../package.json').version)
+  .version(packageVersion)
   .description('Install and manage the Chrome Semantic Shell native bridge');
 
 // Register Native Messaging host
@@ -195,10 +198,42 @@ program
   .description('Install UTF-8 safe chrome-shell launchers in the PATH directories that hold one')
   .option('--dir <dir...>', 'Target directories instead of the PATH lookup')
   .action(async (options) => {
-    const dirs: string[] = options.dir?.length ? options.dir.map((dir: string) => path.resolve(dir)) : await findShimDirectories();
+    const dirs: string[] = options.dir?.length
+      ? options.dir.map((dir: string) => path.resolve(dir))
+      : await findShimDirectories();
     if (!dirs.length) throw new Error('no chrome-shell launcher on PATH; pass --dir <directory>');
     const written = await installShims(path.join(__dirname, 'semantic-cli.js'), dirs);
     for (const file of written) console.log(`wrote ${file}`);
+  });
+
+program
+  .command('install-extension')
+  .description(
+    'Copy the bundled Chrome extension to a fixed folder for "Load unpacked" (replaces old files)',
+  )
+  .option('--dir <dir>', `Target folder (default ${defaultExtensionDir()})`)
+  .option('--json', 'Print JSON')
+  .action(async (options) => {
+    const { dir, version, id } = await installExtension(options.dir ?? defaultExtensionDir());
+    if (options.json) {
+      console.log(JSON.stringify({ dir, version, id }, null, 2));
+      return;
+    }
+    console.log(`installed extension ${version} (ID ${id}) to ${dir}`);
+    console.log(
+      'Next: open chrome://extensions, turn on Developer mode, click "Load unpacked" and pick that folder.',
+    );
+    console.log('Already loaded from that folder: click "Reload" on the extension card instead.');
+  });
+
+program
+  .command('skill-path')
+  .description('Print the folder of the bundled chrome-shell agent skill (holds SKILL.md)')
+  .option('--json', 'Print JSON')
+  .action(async (options) => {
+    const dir = await resolveSkillDir();
+    if (options.json) console.log(JSON.stringify({ path: dir, version: packageVersion }, null, 2));
+    else console.log(dir);
   });
 
 async function main(): Promise<void> {

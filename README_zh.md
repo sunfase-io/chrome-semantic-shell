@@ -152,17 +152,14 @@ iframe 里的元素也会合并进来，操作时自动进入对应 frame。
 ### 1. 安装命令行工具
 
 ```powershell
-npm install -g chrome-semantic-shell
+npm install -g chrome-semantic-shell --registry=https://registry.npmmirror.com
 chrome-shell --version
 ```
 
-国内网络慢可以用镜像（新版本通常几分钟后同步）：
+国内推荐用 npmmirror 镜像（新版本通常几分钟后同步）；海外网络去掉 `--registry` 即可：`npm install -g chrome-semantic-shell`。
 
-```powershell
-npm install -g chrome-semantic-shell --registry=https://registry.npmmirror.com
-```
-
-装好后有两个命令：`chrome-shell`（执行操作）和 `chrome-shell-bridge`（注册与诊断）。npm 安装时会自动注册。
+装好后有两个命令：`chrome-shell`（执行操作）和 `chrome-shell-bridge`（注册、诊断与安装）。npm 安装时会自动注册。
+npm 包里已经带上构建好的 Chrome 扩展和 Agent 技能，后面两步都不用再从 GitHub 下载。
 
 用 pnpm 10 安装时，全局安装脚本可能被拦截，需要手动注册一次：
 
@@ -176,11 +173,21 @@ chrome-shell-bridge register
 
 ### 2. 加载 Chrome 扩展
 
-1. 从 [最新 Release](https://github.com/sunfase-io/chrome-semantic-shell/releases/latest) 下载 `chrome-semantic-shell-extension-<版本>.zip`，
-   解压到一个**固定目录**（Chrome 每次启动都从这里加载，别删）。
+1. 把包内扩展复制到固定目录：
+
+   ```powershell
+   chrome-shell-bridge install-extension   # 输出目录路径，默认 ~/.chrome-semantic-shell/extension
+   ```
+
 2. 打开 `chrome://extensions`，打开右上角“开发者模式”。
-3. 点“加载已解压的扩展程序”，选择解压后包含 `manifest.json` 的那一层目录。
+3. 点“加载已解压的扩展程序”，选择上一步输出的目录（Chrome 每次启动都从这里加载，别删）。
 4. 确认扩展 ID 是 `hnhimbinihlfejljamlgfniplabkaamk`（本地连接只认这个 ID）。
+
+升级命令行工具后，重新执行一次 `chrome-shell-bridge install-extension`，再点扩展卡片上的“重新加载”即可。
+`--dir <目录>` 指定其他目录，`--json` 输出 `{dir, version, id}`。
+
+备选：从 [最新 Release](https://github.com/sunfase-io/chrome-semantic-shell/releases/latest) 下载
+`chrome-semantic-shell-extension-<版本>.zip`，解压到固定目录，按上面的方式加载解压后包含 `manifest.json` 的那一层目录。
 
 扩展没有工具栏按钮和弹窗，这是有意的，所有操作都在终端完成。
 
@@ -199,14 +206,26 @@ chrome-shell 'tab list'      # 应列出你打开的标签页
 
 ### 4. 可选：给 Agent 装技能
 
-从同一个 Release 下载 `chrome-shell-skill-<版本>.zip`，解压后让 `SKILL.md` 位于
-`~/.agents/skills/chrome-shell/SKILL.md`（通用）或 `~/.claude/skills/chrome-shell/SKILL.md`（Claude Code）。
-内容与仓库里的 [`skills/chrome-shell`](skills/chrome-shell) 相同。
+技能随命令行工具一起安装，`chrome-shell-bridge skill-path` 输出它所在的目录（`--json` 输出 `{path, version}`）。
+把这个目录复制过去，让 `SKILL.md` 位于 `~/.agents/skills/chrome-shell/SKILL.md`（通用）或
+`~/.claude/skills/chrome-shell/SKILL.md`（Claude Code）：
+
+```powershell
+# PowerShell
+New-Item -ItemType Directory -Force ~/.agents/skills/chrome-shell | Out-Null
+Copy-Item -Recurse -Force "$(chrome-shell-bridge skill-path)/*" ~/.agents/skills/chrome-shell
+# bash / zsh
+mkdir -p ~/.agents/skills/chrome-shell && cp -R "$(chrome-shell-bridge skill-path)/." ~/.agents/skills/chrome-shell
+```
+
+备选：从同一个 Release 下载 `chrome-shell-skill-<版本>.zip` 解压到上述位置。内容与仓库里的
+[`skills/chrome-shell`](skills/chrome-shell) 相同。
 
 ### 升级、卸载与常见问题
 
-- **升级**：`npm install -g chrome-semantic-shell@latest` → `chrome-shell-bridge register` → 用新 Release 替换扩展目录 → 重新加载扩展。
-  命令行工具和扩展请保持同一个主版本。
+- **升级**：`npm install -g chrome-semantic-shell@latest --registry=https://registry.npmmirror.com` →
+  `chrome-shell-bridge register` → `chrome-shell-bridge install-extension` → 点扩展的“重新加载” →
+  装过技能的再按 `chrome-shell-bridge skill-path` 复制一次。命令行工具和扩展请保持同一个版本。
 - **卸载**：在 `chrome://extensions` 移除扩展，`npm uninstall -g chrome-semantic-shell`，再删除 `com.chromesemanticshell.nativehost.json`：
   - Windows：`%APPDATA%\Google\Chrome\NativeMessagingHosts\` 和注册表项 `HKCU\Software\Google\Chrome\NativeMessagingHosts\com.chromesemanticshell.nativehost`
   - macOS：`~/Library/Application Support/Google/Chrome/NativeMessagingHosts/`
@@ -215,7 +234,7 @@ chrome-shell 'tab list'      # 应列出你打开的标签页
 | 现象                                   | 处理                                                                                                                          |
 | -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
 | `status` 显示未连接                    | 执行 `chrome-shell-bridge register`，重新加载扩展，确认 Chrome 在运行                                                         |
-| 扩展 ID 不对                           | 加载的不是 Release 原包；原样加载 Release 目录                                                                                |
+| 扩展 ID 不对                           | 加载的是改动过的构建；重跑 `chrome-shell-bridge install-extension` 并原样加载该目录                                           |
 | 端口 12306 被占用                      | `chrome-shell-bridge config --port <端口>`，然后重新加载扩展                                                                  |
 | Windows PowerShell 中文乱码、JSON 断裂 | 执行一次 `chrome-shell-bridge shims` 安装 UTF-8 启动器，或先执行 `[Console]::OutputEncoding=[Text.UTF8Encoding]::new($false)` |
 | pnpm 装完找不到命令                    | `pnpm setup` 把全局 bin 加入 `PATH`，新开终端                                                                                 |
@@ -365,8 +384,17 @@ chrome-shell 'storage get session key=accessToken as=$token && http POST /api/fl
 | `-C, --workspace <path>`                  | 指定 `.webmcp` 工具所在的项目目录  |
 | `--timing`                                | 打印往返耗时                       |
 
-`chrome-shell-bridge` 子命令：`register`（注册）、`status`（连接状态）、`config`（端口与默认超时）、
-`shims`（安装 UTF-8 启动器）、`fix-permissions`（修复权限）。
+### 桥接与安装命令
+
+| 命令                                    | 作用                                                                       |
+| --------------------------------------- | -------------------------------------------------------------------------- |
+| `chrome-shell-bridge register`          | 注册 Native Messaging，让 Chrome 能启动桥接进程                            |
+| `chrome-shell-bridge status`            | 查看端口、连接状态和启动器状态（`--json`）                                 |
+| `chrome-shell-bridge config`            | 查看或设置端口与默认超时（`--port`、`--timeout`）                          |
+| `chrome-shell-bridge shims`             | 安装 UTF-8 安全的 `chrome-shell` 启动器                                    |
+| `chrome-shell-bridge install-extension` | 把包内扩展复制到 `~/.chrome-semantic-shell/extension`（`--dir`、`--json`） |
+| `chrome-shell-bridge skill-path`        | 输出包内 Agent 技能目录（`--json`）                                        |
+| `chrome-shell-bridge fix-permissions`   | macOS / Linux 下修复执行权限                                               |
 
 ## 进阶：页面工具、自动学习、Jev
 
@@ -451,6 +479,8 @@ chrome-shell-bridge register
 ```
 
 然后以“加载已解压的扩展程序”加载 `dist-extension/chrome-mv3`。内置的 manifest key 保证扩展 ID 与 Release 版一致。
+打包命令行工具时会执行 `prepack`，把构建好的扩展复制到 `app/native-server/extension`、技能（不含 `evals`）复制到
+`app/native-server/skill/chrome-shell`；扩展未构建、缺少 key 或版本不一致时直接失败，所以要先构建。
 
 验证：
 
@@ -470,7 +500,7 @@ python -m unittest discover -s tests/browser-automation -p "test_*.py" -v
 改成同一个新版本号，推送到 `master`。CI 校验通过后会自动：
 
 1. 打上 `v<版本>` 标签并创建 GitHub Release，附带扩展 zip、技能 zip 和两个 npm 包；
-2. 通过 npm [Trusted Publishing](https://docs.npmjs.com/trusted-publishers/) 发布到 npm（不存 token，自动附带来源证明）。
+2. 通过 npm [Trusted Publishing](https://docs.npmjs.com/trusted-publishers/) 发布到 npm（不存 token，自动附带来源证明）；`chrome-semantic-shell` 包内带有与 zip 相同的扩展和技能。
 
 版本号没变的推送只跑校验，不发版；npm 上已存在的版本会跳过。
 

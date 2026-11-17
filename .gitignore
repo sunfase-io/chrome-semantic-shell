@@ -65,3 +65,7 @@ app/chrome-extension/.env.local
 .chrome-shell/
 __pycache__/
 *.pyc
+
+# Extension and skill staged into the npm package by prepack
+/app/native-server/extension/
+/app/native-server/skill/

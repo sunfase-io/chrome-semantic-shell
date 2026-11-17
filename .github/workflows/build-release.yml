@@ -83,10 +83,15 @@ jobs:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
           mkdir -p release
-          (cd dist-extension/chrome-mv3 && zip -qr "../../release/chrome-semantic-shell-extension-${VERSION}.zip" .)
-          (cd skills && zip -qr "../release/chrome-shell-skill-${VERSION}.zip" chrome-shell -x 'chrome-shell/evals/*' '*/__pycache__/*')
           pnpm --dir packages/shared pack --pack-destination "${GITHUB_WORKSPACE}/release"
+          # prepack stages the built extension and the skill into the package; the zips reuse those copies.
           pnpm --dir app/native-server pack --pack-destination "${GITHUB_WORKSPACE}/release"
+          (cd app/native-server/extension && zip -qr "${GITHUB_WORKSPACE}/release/chrome-semantic-shell-extension-${VERSION}.zip" .)
+          (cd app/native-server/skill && zip -qr "${GITHUB_WORKSPACE}/release/chrome-shell-skill-${VERSION}.zip" chrome-shell)
+          listing="$(tar -tzf "release/chrome-semantic-shell-${VERSION}.tgz")"
+          for file in package/extension/manifest.json package/skill/chrome-shell/SKILL.md; do
+            grep -qx "${file}" <<< "${listing}" || { echo "${file} missing from the npm tarball" >&2; exit 1; }
+          done
 
       - name: Upload release assets
         uses: actions/upload-artifact@v4

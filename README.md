@@ -180,15 +180,16 @@ start the CLI's bridge process.
 ### 1. Install the CLI
 
 ```powershell
-npm install -g chrome-semantic-shell
+npm install -g chrome-semantic-shell --registry=https://registry.npmmirror.com
 chrome-shell --version
 ```
 
-In mainland China the npmmirror registry is usually faster (new versions sync within minutes):
-`npm install -g chrome-semantic-shell --registry=https://registry.npmmirror.com`.
+The npmmirror registry is the fast choice in mainland China (new versions sync within minutes); elsewhere drop
+`--registry` to use npmjs.com: `npm install -g chrome-semantic-shell`.
 
-This installs `chrome-shell` (runs operations) and `chrome-shell-bridge` (registration and diagnostics). npm
-registers the bridge automatically.
+This installs `chrome-shell` (runs operations) and `chrome-shell-bridge` (registration, diagnostics, setup). npm
+registers the bridge automatically. The package also carries the built Chrome extension and the agent skill, so
+the next steps need no GitHub download.
 
 pnpm 10 may block global install scripts, so register once by hand:
 
@@ -203,12 +204,22 @@ Without npm registry access, download both `.tgz` files from the
 
 ### 2. Load the Chrome extension
 
-1. Download `chrome-semantic-shell-extension-<version>.zip` from the
-   [latest release](https://github.com/sunfase-io/chrome-semantic-shell/releases/latest) and extract it to a
-   **permanent folder** (Chrome loads it from there on every start).
+1. Copy the bundled extension to a fixed folder:
+
+   ```powershell
+   chrome-shell-bridge install-extension   # prints the folder, ~/.chrome-semantic-shell/extension by default
+   ```
+
 2. Open `chrome://extensions` and turn on **Developer mode**.
-3. Click **Load unpacked** and pick the folder that contains `manifest.json`.
+3. Click **Load unpacked** and pick the printed folder (Chrome loads it from there on every start).
 4. Check that the extension ID is `hnhimbinihlfejljamlgfniplabkaamk` (the bridge accepts only this ID).
+
+After upgrading the CLI, run `chrome-shell-bridge install-extension` again and click **Reload** on the extension
+card. `--dir <folder>` picks another folder; `--json` prints `{dir, version, id}`.
+
+Alternative: download `chrome-semantic-shell-extension-<version>.zip` from the
+[latest release](https://github.com/sunfase-io/chrome-semantic-shell/releases/latest), extract it to a permanent
+folder and load that folder the same way.
 
 The extension has no toolbar button or popup on purpose; everything happens in the terminal.
 
@@ -227,14 +238,27 @@ chrome-shell 'tab list'      # should list your open tabs
 
 ### 4. Optional: install the agent skill
 
-Download `chrome-shell-skill-<version>.zip` from the same release and extract it so that `SKILL.md` ends up at
-`~/.agents/skills/chrome-shell/SKILL.md` (shared) or `~/.claude/skills/chrome-shell/SKILL.md` (Claude Code). The
-same files live in [`skills/chrome-shell`](skills/chrome-shell).
+The skill ships with the CLI; `chrome-shell-bridge skill-path` prints its folder (`--json` prints `{path, version}`).
+Copy that folder so that `SKILL.md` ends up at `~/.agents/skills/chrome-shell/SKILL.md` (shared) or
+`~/.claude/skills/chrome-shell/SKILL.md` (Claude Code):
+
+```powershell
+# PowerShell
+New-Item -ItemType Directory -Force ~/.agents/skills/chrome-shell | Out-Null
+Copy-Item -Recurse -Force "$(chrome-shell-bridge skill-path)/*" ~/.agents/skills/chrome-shell
+# bash / zsh
+mkdir -p ~/.agents/skills/chrome-shell && cp -R "$(chrome-shell-bridge skill-path)/." ~/.agents/skills/chrome-shell
+```
+
+Alternative: download `chrome-shell-skill-<version>.zip` from the same release and extract it there. The same files
+live in [`skills/chrome-shell`](skills/chrome-shell).
 
 ### Upgrade, uninstall, troubleshooting
 
-- **Upgrade:** `npm install -g chrome-semantic-shell@latest` → `chrome-shell-bridge register` → replace the extension
-  folder with the new release → reload the extension. Keep the CLI and extension on the same major version.
+- **Upgrade:** `npm install -g chrome-semantic-shell@latest --registry=https://registry.npmmirror.com` →
+  `chrome-shell-bridge register` → `chrome-shell-bridge install-extension` → click **Reload** on the extension →
+  copy `chrome-shell-bridge skill-path` again if you installed the skill. Keep the CLI and extension on the same
+  version.
 - **Uninstall:** remove the extension in `chrome://extensions`, run `npm uninstall -g chrome-semantic-shell`, then
   delete `com.chromesemanticshell.nativehost.json`:
   - Windows: `%APPDATA%\Google\Chrome\NativeMessagingHosts\` and the registry key
@@ -245,7 +269,7 @@ same files live in [`skills/chrome-shell`](skills/chrome-shell).
 | Symptom                                           | Fix                                                                                                                                        |
 | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
 | `status` says not connected                       | Run `chrome-shell-bridge register`, reload the extension, make sure Chrome is running                                                      |
-| Wrong extension ID                                | You loaded a modified build; load the release folder unchanged                                                                             |
+| Wrong extension ID                                | You loaded a modified build; rerun `chrome-shell-bridge install-extension` and load that folder unchanged                                  |
 | Port 12306 in use                                 | `chrome-shell-bridge config --port <port>`, then reload the extension                                                                      |
 | Garbled text or broken JSON in Windows PowerShell | Run `chrome-shell-bridge shims` once to install UTF-8 launchers, or run `[Console]::OutputEncoding=[Text.UTF8Encoding]::new($false)` first |
 | Command not found after pnpm install              | `pnpm setup` to put the global bin on `PATH`, then open a new terminal                                                                     |
@@ -398,8 +422,17 @@ full grammar, options, and output format are in the [CLI reference](skills/chrom
 | `-C, --workspace <path>`                  | Project folder that holds `.webmcp` tools          |
 | `--timing`                                | Print round-trip time                              |
 
-`chrome-shell-bridge` subcommands: `register`, `status`, `config` (port and default timeout), `shims` (UTF-8
-launchers), `fix-permissions`.
+### Bridge and setup commands
+
+| Command                                 | Purpose                                                                                |
+| --------------------------------------- | -------------------------------------------------------------------------------------- |
+| `chrome-shell-bridge register`          | Register the Native Messaging host so Chrome can start the bridge                      |
+| `chrome-shell-bridge status`            | Show ports, connection state and launcher state (`--json`)                             |
+| `chrome-shell-bridge config`            | Show or set the port and default timeout (`--port`, `--timeout`)                       |
+| `chrome-shell-bridge shims`             | Install UTF-8 safe `chrome-shell` launchers                                            |
+| `chrome-shell-bridge install-extension` | Copy the bundled extension to `~/.chrome-semantic-shell/extension` (`--dir`, `--json`) |
+| `chrome-shell-bridge skill-path`        | Print the bundled agent skill folder (`--json`)                                        |
+| `chrome-shell-bridge fix-permissions`   | Restore execute permissions on macOS / Linux                                           |
 
 ## Advanced: page tools, automatic learning, Jev
 
@@ -491,7 +524,9 @@ chrome-shell-bridge register
 ```
 
 Then load `dist-extension/chrome-mv3` with **Load unpacked**. The built-in manifest key keeps the extension ID equal
-to the release build.
+to the release build. Packing the CLI runs `prepack`, which copies the built extension to `app/native-server/extension`
+and the skill (without `evals`) to `app/native-server/skill/chrome-shell`; it fails when the extension is missing, has
+no key, or carries a different version, so build first.
 
 Checks:
 
@@ -513,7 +548,7 @@ so CI fails when one is missed.
 
 1. tags `v<version>` and creates a GitHub Release with the extension zip, the skill zip, and both npm tarballs;
 2. publishes to npm through [Trusted Publishing](https://docs.npmjs.com/trusted-publishers/) (no stored token,
-   automatic provenance).
+   automatic provenance); the `chrome-semantic-shell` tarball carries the same extension and skill as the zips.
 
 Pushes that do not change the version only run checks; versions already on npm are skipped.
 

@@ -31,7 +31,19 @@ chrome-shell 'inspect text' --tab 123 --out page.txt
 | `--expected-url <url>`          | Refuse effects if the target URL changed                                                     |
 | `--print-entry`                 | Print the CLI entry script path (for `node <entry>` from scripts)                            |
 
-The script limit is 64 KiB (`js file=` contents travel as variables and do not count). The endpoint is restricted to loopback HTTP. `chrome-shell-bridge status` shows ports, bridge state and whether the launchers are the UTF-8 managed ones; `chrome-shell-bridge shims` installs them; `chrome-shell-bridge config` manages persistent settings.
+The script limit is 64 KiB (`js file=` contents travel as variables and do not count). The endpoint is restricted to loopback HTTP.
+
+Bridge and setup commands (`chrome-shell-bridge <command> --help` for options):
+
+| Command                                 | Meaning                                                                                                  |
+| --------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `chrome-shell-bridge register`          | Register the Native Messaging host (`--system`, `--browser chrome\|chromium\|all`, `--detect`)           |
+| `chrome-shell-bridge status`            | Ports, bridge state and whether the launchers are the UTF-8 managed ones; exit code 1 when not connected |
+| `chrome-shell-bridge config`            | Show or set persistent settings (`--port`, `--timeout`)                                                  |
+| `chrome-shell-bridge shims`             | Install the UTF-8 managed `chrome-shell` launchers                                                       |
+| `chrome-shell-bridge install-extension` | Copy the bundled extension to `~/.chrome-semantic-shell/extension` (or `--dir`), replacing the old files |
+| `chrome-shell-bridge skill-path`        | Print the bundled skill folder (holds `SKILL.md`); `--json` adds the version                             |
+| `chrome-shell-bridge fix-permissions`   | Restore execute permissions of the native host files                                                     |
 
 ## Composition and Quoting
 

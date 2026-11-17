@@ -14,15 +14,22 @@ Requires Node.js 20+ and Google Chrome or Chromium.
 1. Install the CLI:
 
    ```sh
-   npm install -g chrome-semantic-shell
+   npm install -g chrome-semantic-shell --registry=https://registry.npmmirror.com   # mainland China
+   npm install -g chrome-semantic-shell                                              # elsewhere
    ```
 
    With pnpm 10, also run `chrome-shell-bridge register`, because global lifecycle scripts may be blocked.
 
-2. Download `chrome-semantic-shell-extension-<version>.zip` from the
-   [latest release](https://github.com/sunfase-io/chrome-semantic-shell/releases/latest), extract it to a
-   permanent folder, open `chrome://extensions`, enable **Developer mode**, and choose **Load unpacked**.
-   The extension ID must be `hnhimbinihlfejljamlgfniplabkaamk`.
+2. Copy the bundled extension to a fixed folder, then open `chrome://extensions`, enable **Developer mode**,
+   choose **Load unpacked** and pick the printed folder. The extension ID must be
+   `hnhimbinihlfejljamlgfniplabkaamk`. After an upgrade, run the command again and click **Reload**.
+
+   ```sh
+   chrome-shell-bridge install-extension   # ~/.chrome-semantic-shell/extension by default, --dir to change
+   ```
+
+   Alternative: extract `chrome-semantic-shell-extension-<version>.zip` from the
+   [latest release](https://github.com/sunfase-io/chrome-semantic-shell/releases/latest) and load that folder.
 
 3. Register the host, reload the extension once, and verify:
 
@@ -39,7 +46,10 @@ chrome-shell 'inspect interactive limit=30' --tab 123
 chrome-shell 'fillform Email=$email && query role=button name="Sign in" | click && wait text="Dashboard"' --tab 123 --var 'email=user@example.com'
 ```
 
-Documentation, troubleshooting, the agent skill, and the full CLI reference:
+The agent skill ships in the package: `chrome-shell-bridge skill-path` prints its folder (holds `SKILL.md`); copy
+it to `~/.agents/skills/chrome-shell` or `~/.claude/skills/chrome-shell`.
+
+Documentation, troubleshooting, and the full CLI reference:
 <https://github.com/sunfase-io/chrome-semantic-shell>
 
 ## License
